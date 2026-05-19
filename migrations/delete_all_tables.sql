@@ -1,0 +1,11 @@
+-- DELETE ALL EXISTING TABLES
+-- Run this first to clean the database
+
+DROP TABLE IF EXISTS sms.grades CASCADE;
+DROP TABLE IF EXISTS sms.teacher_subjects CASCADE;
+DROP TABLE IF EXISTS sms.teachers_class CASCADE;
+DROP TABLE IF EXISTS sms.subjects CASCADE;
+DROP TABLE IF EXISTS sms.streams CASCADE;
+DROP TABLE IF EXISTS sms.teachers CASCADE;
+DROP TABLE IF EXISTS sms.students CASCADE;
+DROP TABLE IF EXISTS sms.classes CASCADE;

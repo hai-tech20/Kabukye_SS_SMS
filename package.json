@@ -1,0 +1,49 @@
+{
+  "name": "kabukye_ss_sms",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "eslint",
+    "dev:sms": "next dev -p 3000",
+    "dev:website": "cd \"kabukyeSS website\" && npm start",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:website\"",
+    "postinstall": "cd \"kabukyeSS website\" && npm install"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.9.0",
+    "@supabase/supabase-js": "^2.99.3",
+    "@tanstack/react-query": "^5.100.8",
+    "@tanstack/react-query-devtools": "^5.100.8",
+    "@types/react-datepicker": "^6.2.0",
+    "autoprefixer": "^10.4.27",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.0",
+    "jose": "^6.2.2",
+    "next": "14.2.5",
+    "node-fetch": "^3.3.2",
+    "react": "18.3.1",
+    "react-datepicker": "^9.1.0",
+    "react-dom": "18.3.1",
+    "sonner": "^2.0.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "concurrently": "^9.2.1",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.5",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5"
+  },
+  "eslintConfig": {
+    "extends": [
+      "next/core-web-vitals"
+    ]
+  }
+}
