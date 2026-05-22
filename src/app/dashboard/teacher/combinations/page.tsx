@@ -421,7 +421,11 @@ export default function TeacherCombinationsPage() {
                                   type="button"
                                   onClick={() => handleSaveAssignment(student.id)}
                                   disabled={isSaving[student.id] || !hasChanges}
-                                  className={`inline-flex items-center px-3 py-2 bg-purple-600 text-white text-sm rounded-md hover:bg-purple-700 ${(!hasChanges || isSaving[student.id]) ? 'opacity-50 blur-sm cursor-not-allowed' : ''}`}
+                                  className={`inline-flex items-center px-3 py-2 rounded-md text-sm transition-all duration-200 ${
+                                    isSaving[student.id] || !hasChanges
+                                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-100'
+                                      : 'bg-purple-600 text-white hover:bg-purple-700 shadow-sm'
+                                  }`}
                                 >
                                   {isSaving[student.id] ? 'Saving...' : 'Save'}
                                 </button>
