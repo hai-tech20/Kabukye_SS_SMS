@@ -237,10 +237,11 @@ export default function TeacherCombinationsPage() {
       if (!response.ok) {
         throw new Error(result.error || 'Failed to save subject assignments.');
       }
+      // Immediately mark the current state as saved for this student row so the Save button deactivates.
+      setDraftAssignments(prev => ({ ...prev, [studentId]: JSON.parse(JSON.stringify(assignment)) }));
+      setInitialDrafts(prev => ({ ...prev, [studentId]: JSON.parse(JSON.stringify(assignment)) }));
       const teacherStream = teacher?.class_teacher_stream_id?.toString().toLowerCase().trim() || undefined;
       await loadPageData(normalizedClassId, teacherStream);
-      // Update the snapshot so Save is disabled until further edits
-      setInitialDrafts(prev => ({ ...prev, [studentId]: JSON.parse(JSON.stringify(assignment)) }));
       alert('Subject assignments saved successfully.');
     } catch (error: any) {
       console.error(error);
