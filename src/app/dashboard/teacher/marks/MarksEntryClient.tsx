@@ -72,6 +72,7 @@ export default function MarksEntryClient({
   const [saving, setSaving] = useState(false);
   const [hasEdits, setHasEdits] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
+  const [isPublished, setIsPublished] = useState(false);
   
   // Pre-filtered data based on teacher assignments
   const [classes] = useState(() => {
@@ -133,6 +134,37 @@ export default function MarksEntryClient({
       setError('No subjects assigned to you. Please contact the administrator.');
     }
   }, [initialAssignments]);
+
+  useEffect(() => {
+    const fetchPublishedStatus = async () => {
+      if (!selectedClass || !selectedStream || !selectedTerm || !selectedYear) {
+        setIsPublished(false);
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams();
+        params.append('academic_year', selectedYear);
+        params.append('term', selectedTerm);
+        params.append('class_id', selectedClass);
+        params.append('stream_id', selectedStream);
+
+        const res = await fetch(`/api/reports?${params.toString()}`);
+        if (!res.ok) {
+          setIsPublished(false);
+          return;
+        }
+
+        const json = await res.json();
+        setIsPublished(Boolean(json?.data?.is_published));
+      } catch (err) {
+        console.error('Error fetching published status:', err);
+        setIsPublished(false);
+      }
+    };
+
+    fetchPublishedStatus();
+  }, [selectedClass, selectedStream, selectedTerm, selectedYear]);
 
   // Fetch streams and subjects when class changes
   useEffect(() => {
@@ -342,13 +374,21 @@ export default function MarksEntryClient({
         return;
       }
 
+      if (isPublished) {
+        alert('Cannot save grades: this term has already been published and editing is locked.');
+        return;
+      }
+
       const res = await fetch('/api/grades', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(gradesData)
       });
 
-      if (!res.ok) throw new Error('Failed to save grades');
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body?.error || 'Failed to save grades');
+      }
       
       setHasEdits(false);
       alert('Grades saved successfully!');
@@ -475,7 +515,7 @@ export default function MarksEntryClient({
               </div>
             </div>
             
-            <div className="mt-4 flex gap-4">
+            <div className="mt-4 flex flex-col gap-4">
               <div className="flex-1">
                 <input
                   type="text"
@@ -485,11 +525,16 @@ export default function MarksEntryClient({
                   className="w-full border border-gray-300 rounded-md px-3 py-2"
                 />
               </div>
+              {isPublished && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  This term has been published for the selected class and stream. Grade entry is locked.
+                </div>
+              )}
               <button
                 onClick={handleSave}
-                disabled={saving || !selectedClass || !selectedStream || !selectedSubject || !hasEdits}
+                disabled={saving || !selectedClass || !selectedStream || !selectedSubject || !hasEdits || isPublished}
                 className={`px-6 py-2 rounded-md transition-all duration-200 ${
-                  saving || !selectedClass || !selectedStream || !selectedSubject || !hasEdits
+                  saving || !selectedClass || !selectedStream || !selectedSubject || !hasEdits || isPublished
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-100'
                     : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
                 }`}

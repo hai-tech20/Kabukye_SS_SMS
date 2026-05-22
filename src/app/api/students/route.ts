@@ -14,8 +14,11 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '1000');
     const search = searchParams.get('search');
 
+    const normalizedClassId = classId?.toLowerCase().trim() || undefined;
+    const normalizedStreamId = streamId?.toLowerCase().trim() || undefined;
+
     // Check if A-level class (S5 or S6) - for subject filtering
-    const isALevel = classId?.toLowerCase().includes('s5') || classId?.toLowerCase().includes('s6');
+    const isALevel = normalizedClassId?.includes('s5') || normalizedClassId?.includes('s6');
     console.log(`Students API: classId=${classId}, subjectId=${subjectId}, isALevel=${isALevel}`);
 
     // For A-level, resolve the correct subject ID based on student's actual class
@@ -85,11 +88,11 @@ export async function GET(request: NextRequest) {
         .eq('student_subjects.subject_id', resolvedSubjectId);
       
       // Apply class and stream filters immediately for A-level
-      if (classId) {
-        query = query.eq('class_id', classId);
+      if (normalizedClassId) {
+        query = query.ilike('class_id', normalizedClassId);
       }
-      if (streamId) {
-        query = query.eq('stream_id', streamId);
+      if (normalizedStreamId) {
+        query = query.ilike('stream_id', normalizedStreamId);
       }
     } else {
       console.log(`Students API: Using standard query (no A-level subject filter)`);
@@ -155,11 +158,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Apply filters (skip class/stream for A-level with subject filter as they're already applied above)
-    if (!(isALevel && subjectId) && classId) {
-      query = query.eq('class_id', classId);
+    if (!(isALevel && subjectId) && normalizedClassId) {
+      query = query.ilike('class_id', normalizedClassId);
     }
-    if (!(isALevel && subjectId) && streamId) {
-      query = query.eq('stream_id', streamId);
+    if (!(isALevel && subjectId) && normalizedStreamId) {
+      query = query.ilike('stream_id', normalizedStreamId);
     }
     if (search) {
       query = query.ilike('full_name', `%${search}%`);

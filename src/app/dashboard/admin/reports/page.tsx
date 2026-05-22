@@ -13,7 +13,7 @@ interface Student {
   gender: string;
   photo_url?: string;
   subject_combination?: string;
-  school_pay_code?: string;
+  schoolpay_code?: string;
 }
 
 interface Grade {
@@ -45,6 +45,10 @@ interface ReportCardProps {
   positionInStream?: number;
   totalStudentsInClass?: number;
   totalStudentsInStream?: number;
+  optionalSubjects?: Array<{ id: string; name: string }>;
+  assignedSubjects?: Array<{ id: string; name: string; subject_type: string }>;
+  classTeacherComment?: string;
+  headTeacherComment?: string;
 }
 
 const getClassLevel = (className: string): 'S1-S2' | 'S3-S4' | 'S5-S6' => {
@@ -72,78 +76,105 @@ const getDescriptorFromGrade = (grade: string): string => {
   }
 };
 
+const normalizeReportGrades = (grades: any[]): Grade[] => {
+  return grades.map((g: any) => ({
+    student_id: g.student_id,
+    subject: g.subject || g.subjects?.name || '',
+    mot: g.mot ?? g.mot_score ?? 0,
+    eot: g.eot ?? g.eot_score ?? 0,
+    final_score: g.final_score ?? 0,
+    grade: g.grade || getGradeFromScore(g.final_score ?? 0),
+    descriptor: g.descriptor || getDescriptorFromGrade(g.grade || getGradeFromScore(g.final_score ?? 0)),
+    teacher: g.teacher || g.teachers?.full_name || '' ,
+    points: g.points ?? 0
+  }));
+};
+
+// Ordinal helper (available to ReportCard components)
+const ordinal = (n: number | undefined) => {
+  if (!n || n <= 0) return '';
+  const s = ['th','st','nd','rd'];
+  const v = n % 100;
+  return n + (s[(v-20)%10] || s[v] || s[0]);
+};
+
 const ReportCardHeader: React.FC<{ student: Student; term: string; year: string }> = ({ student, term, year }) => (
-  <div className="mb-4">
-    <div className="flex items-start justify-between border-b-4 border-blue-900 pb-3 mb-3">
+  <div className="mb-4 pb-2 border-b-2 border-blue-900">
+    {/* Top Header with Logo and School Name */}
+    <div className="flex items-start justify-between mb-4">
       <div className="flex-shrink-0">
-        <Image src="/media/badge.png" alt="School Badge" width={100} height={100} className="object-contain" />
+        <Image src="/media/badge.png" alt="School Badge" width={80} height={80} className="object-contain" />
       </div>
-      <div className="text-center flex-1 px-3">
-        <h1 className="text-2xl font-black text-blue-900 mb-1 uppercase tracking-wider">Kabukye Secondary School</h1>
-        <p className="text-xs font-medium text-gray-700 mb-0.5">P.O.Box 117, Kamuli. Tel: 0702755397 / 0770535212</p>
-        <p className="text-xs font-medium text-gray-700 mb-0.5">Email: kabukyesecondaryschool@gmail.com</p>
-        <p className="text-xs font-bold text-gray-800 italic">&quot;HOLISTIC EDUCATION, DESCIPLINE AND HARDWORK&quot;</p>
+      <div className="text-center flex-1 px-2">
+        <h1 className="text-2xl font-black text-blue-900 mb-0 uppercase tracking-widest">KABUKYE SECONDARY SCHOOL</h1>
+        <p className="text-sm font-semibold text-gray-800 mb-1">P.O.Box 117, Kamuli District, Uganda</p>
+        <p className="text-xs font-medium text-gray-700 mb-1">Tel: +256 702 755 397 | +256 770 535 212</p>
+        <p className="text-xs font-medium text-gray-700 mb-1">Email: kabukyesecondaryschool@gmail.com</p>
+        <p className="text-sm font-bold text-gray-800 italic border-t pt-1">&quot;HOLISTIC EDUCATION, DISCIPLINE AND HARDWORK&quot;</p>
       </div>
-      <div className="w-24" />
+      <div className="w-16" />
     </div>
     
-    <div className="text-center mb-4">
-      <h2 className="text-lg font-bold text-black uppercase">End of Term Academic Report Card</h2>
+    {/* Report Title */}
+    <div className="text-center bg-blue-900 text-white py-2 rounded mb-4">
+      <h2 className="text-xl font-bold uppercase tracking-wide">TERM {term} ACADEMIC REPORT CARD</h2>
+      <p className="text-xs mt-1">Academic Year {year}</p>
     </div>
     
-    <div className="flex items-center gap-6 mb-4">
-      <div className="flex-shrink-0">
+    {/* Student Information Section */}
+    <div className="grid grid-cols-4 gap-3 mb-3">
+      <div className="col-span-1">
         {student.photo_url && student.photo_url.length > 0 ? (
           <Image 
             src={student.photo_url} 
             alt={student.full_name} 
-            width={120}
-            height={120}
-            className="w-30 h-30 object-cover border-3 border-gray-300"
+            width={80}
+            height={110}
+            className="w-20 h-28 object-cover border-2 border-gray-400 rounded"
           />
         ) : (
-          <div className="w-30 h-30 bg-gray-200 border-3 border-gray-300 flex items-center justify-center">
-            <svg className="w-16 h-16 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+          <div className="w-20 h-28 bg-gray-200 border-2 border-gray-400 flex items-center justify-center rounded">
+            <svg className="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
             </svg>
           </div>
         )}
       </div>
       
-      <div className="flex-1">
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <span className="font-bold text-black text-xs">NAME: </span>
-            <span className="text-black text-xs">{student.full_name}</span>
+      <div className="col-span-4">
+        <div className="grid grid-cols-3 gap-2 text-sm">
+          <div className="col-span-3">
+            <div className="font-bold text-gray-700">STUDENT NAME:</div>
+            <div className="text-gray-900 font-semibold text-base uppercase">{student.full_name}</div>
           </div>
           <div>
-            <span className="font-bold text-black text-xs">STREAM: </span>
-            <span className="text-black text-xs">{student.stream}</span>
+            <div className="font-bold text-xs text-gray-600">CLASS:</div>
+            <div className="text-gray-900 font-bold">{student.class}</div>
           </div>
           <div>
-            <span className="font-bold text-black text-xs">GENDER: </span>
-            <span className="text-black text-xs">{student.gender}</span>
+            <div className="font-bold text-xs text-gray-600">STREAM:</div>
+            <div className="text-gray-900 font-bold">{student.stream}</div>
           </div>
           <div>
-            <span className="font-bold text-black text-xs">TERM: </span>
-            <span className="text-black text-xs">{term}</span>
+            <div className="font-bold text-xs text-gray-600">GENDER:</div>
+            <div className="text-gray-900 font-bold">{student.gender}</div>
+          </div>
+          <div className="col-span-2">
+            <div className="font-bold text-xs text-gray-600">SCHOOL PAY CODE:</div>
+            <div className="text-gray-900 font-bold">{student.schoolpay_code || '-'}</div>
           </div>
           <div>
-            <span className="font-bold text-black text-xs">CLASS: </span>
-            <span className="text-black text-xs">{student.class} {student.stream}</span>
+            <div className="font-bold text-xs text-gray-600">TERM:</div>
+            <div className="text-gray-900 font-bold">{term}</div>
           </div>
           <div>
-            <span className="font-bold text-black text-xs">YEAR: </span>
-            <span className="text-black text-xs">{year}</span>
-          </div>
-          <div>
-            <span className="font-bold text-black text-xs">Student ID: </span>
-            <span className="text-black text-xs">{student.school_pay_code || '-'}</span>
+            <div className="font-bold text-xs text-gray-600">YEAR:</div>
+            <div className="text-gray-900 font-bold">{year}</div>
           </div>
           {(student.class === 'S5' || student.class === 'S6') && student.subject_combination && (
-            <div>
-              <span className="font-bold text-black text-xs">Combination(for s5 and s6): </span>
-              <span className="text-black text-xs">{student.subject_combination}</span>
+            <div className="col-span-3">
+              <div className="font-bold text-xs text-gray-600">SUBJECT COMBINATION:</div>
+              <div className="text-gray-900 font-bold">{student.subject_combination}</div>
             </div>
           )}
         </div>
@@ -153,71 +184,115 @@ const ReportCardHeader: React.FC<{ student: Student; term: string; year: string 
 );
 
 const GradingScale: React.FC = () => (
-  <div className="mb-3">
+  <div className="mb-4 mt-4">
+    <div className="bg-blue-900 text-white font-bold py-2 px-3 rounded-t text-center text-sm">
+      GRADING SCHEME
+    </div>
     <table className="w-full border-collapse border border-gray-800 text-xs">
       <tbody>
-        <tr>
-          <td className="border border-gray-800 px-2 py-1 text-center font-bold text-black bg-gray-100" colSpan={5}>GRADING SCHEME</td>
+        <tr className="bg-gray-100">
+          <td className="border border-gray-800 px-3 py-2 text-center font-bold text-blue-900">A</td>
+          <td className="border border-gray-800 px-3 py-2 text-center font-bold text-blue-900">B</td>
+          <td className="border border-gray-800 px-3 py-2 text-center font-bold text-blue-900">C</td>
+          <td className="border border-gray-800 px-3 py-2 text-center font-bold text-blue-900">D</td>
+          <td className="border border-gray-800 px-3 py-2 text-center font-bold text-blue-900">E</td>
         </tr>
         <tr>
-          <td className="border border-gray-800 px-2 py-1 text-center font-bold text-black">A</td>
-          <td className="border border-gray-800 px-2 py-1 text-center font-bold text-black">B</td>
-          <td className="border border-gray-800 px-2 py-1 text-center font-bold text-black">C</td>
-          <td className="border border-gray-800 px-2 py-1 text-center font-bold text-black">D</td>
-          <td className="border border-gray-800 px-2 py-1 text-center font-bold text-black">E</td>
+          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">Exceptional</td>
+          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">Outstanding</td>
+          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">Satisfactory</td>
+          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">Basic</td>
+          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">Elementary</td>
         </tr>
-        <tr>
-          <td className="border border-gray-800 px-2 py-1 text-center text-black">Exceptional</td>
-          <td className="border border-gray-800 px-2 py-1 text-center text-black">Outstanding</td>
-          <td className="border border-gray-800 px-2 py-1 text-center text-black">Satisfactory</td>
-          <td className="border border-gray-800 px-2 py-1 text-center text-black">Basic</td>
-          <td className="border border-gray-800 px-2 py-1 text-center text-black">Elementary</td>
-        </tr>
-        <tr>
-          <td className="border border-gray-800 px-2 py-1 text-center text-black">80-100</td>
-          <td className="border border-gray-800 px-2 py-1 text-center text-black">70-79</td>
-          <td className="border border-gray-800 px-2 py-1 text-center text-black">50-69</td>
-          <td className="border border-gray-800 px-2 py-1 text-center text-black">35-49</td>
-          <td className="border border-gray-800 px-2 py-1 text-center text-black">00-34</td>
+        <tr className="bg-blue-50">
+          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">80-100</td>
+          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">70-79</td>
+          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">50-69</td>
+          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">35-49</td>
+          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">00-34</td>
         </tr>
       </tbody>
     </table>
   </div>
 );
 
-const ReportCardSignatures: React.FC<{ classTeacher: string; headTeacher: string; academicTerm?: AcademicTerm }> = ({ classTeacher, headTeacher, academicTerm }) => (
-  <div>
-    <div className="mb-3">
-      <p className="font-bold text-black text-xs">CLASS TEACHER: {classTeacher}</p>
+const ReportCardSignatures: React.FC<{ classTeacher: string; headTeacher: string; academicTerm?: AcademicTerm; classTeacherComment?: string; headTeacherComment?: string }> = ({ classTeacher, headTeacher, academicTerm, classTeacherComment, headTeacherComment }) => (
+  <div className="mt-6">
+    <div className="mb-4">
+      <div className="font-bold text-gray-800 text-sm border-b-2 border-gray-400 pb-1">CLASS TEACHER: {classTeacher}</div>
     </div>
     
-    <table className="w-full border-collapse border border-gray-800 mb-3 text-xs">
+    <table className="w-full border-collapse border-2 border-gray-800 mb-4 text-xs">
       <tbody>
         <tr>
-          <td className="border border-gray-800 px-2 py-1 text-left text-black w-1/2">Class Teacher&apos;s comment</td>
-          <td className="border border-gray-800 px-2 py-2 text-left text-black w-1/2"></td>
+          <td className="border border-gray-800 px-3 py-3 text-left font-bold text-gray-800 bg-blue-50 w-1/2">Class Teacher&apos;s Comments</td>
+          <td className="border border-gray-800 px-3 py-6 text-left text-gray-900 w-1/2">{classTeacherComment || ''}</td>
         </tr>
         <tr>
-          <td className="border border-gray-800 px-2 py-1 text-left text-black">Headteacher&apos;s comment</td>
-          <td className="border border-gray-800 px-2 py-2 text-left text-black"></td>
+          <td className="border border-gray-800 px-3 py-3 text-left font-bold text-gray-800 bg-blue-50">Head Teacher&apos;s Comments</td>
+          <td className="border border-gray-800 px-3 py-6 text-left text-gray-900">{headTeacherComment || ''}</td>
         </tr>
       </tbody>
     </table>
     
-    <div className="flex justify-between items-center">
-      <p className="text-black text-xs">Date of issue: {academicTerm?.end_date || ''}</p>
-      <p className="text-black text-xs">Next Term Begins: {academicTerm?.next_term_start_date || ''}</p>
+    <div className="grid grid-cols-2 gap-4 text-xs">
+      <div>
+        <p className="font-bold text-gray-800 mb-1">Date of Issue:</p>
+        <p className="text-gray-900">{academicTerm?.end_date || '_______________'}</p>
+      </div>
+      <div>
+        <p className="font-bold text-gray-800 mb-1">Next Term Begins:</p>
+        <p className="text-gray-900">{academicTerm?.next_term_start_date || '_______________'}</p>
+      </div>
     </div>
   </div>
 );
 
-const ReportCardS1S2: React.FC<ReportCardProps> = (props) => {
-  const { student, grades, term, year, classTeacher, headTeacher, academicTerm, positionInClass, positionInStream, totalStudentsInClass, totalStudentsInStream } = props;
+interface ReportCardS1S2Props extends ReportCardProps {
+  optionalSubjects?: Array<{ id: string; name: string }>;
+}
+
+const ReportCardS1S2: React.FC<ReportCardS1S2Props> = (props) => {
+  const { student, grades, term, year, classTeacher, headTeacher, academicTerm, positionInClass, positionInStream, totalStudentsInClass, totalStudentsInStream, optionalSubjects } = props;
+  
+  // Fixed subjects for S1-S2 as per template
+  const fixedSubjects = [
+    'Mathematics',
+    'History and Political Education',
+    'English',
+    'Geography',
+    'Physics',
+    'Biology',
+    'Chemistry',
+    'Physical education',
+    'Religious Education (CRE/IRE)',
+    'Entrepreneurship',
+    'Kiswahili',
+  ];
+
+  // Create a map of grades by subject name
+  const gradesMap = new Map<string, Grade>();
+  grades.forEach(grade => {
+    gradesMap.set(grade.subject, grade);
+  });
+
+  // Add optional subjects to the list
+  const allSubjects = [...fixedSubjects];
+  if (optionalSubjects && optionalSubjects.length > 0) {
+    optionalSubjects.forEach(opt => {
+      allSubjects.push(opt.name);
+    });
+  }
+  // Pad with empty slots if less than 2 optionals
+  while (allSubjects.length < fixedSubjects.length + 2) {
+    allSubjects.push('');
+  }
+
   const totalScore = grades.reduce((sum, g) => sum + (g.final_score || 0), 0);
   const averageScore = grades.length > 0 ? Math.round(totalScore / grades.length) : 0;
 
   return (
-    <div className="bg-white border border-gray-400 p-4" style={{ pageBreakInside: 'avoid' }}>
+    <div className="bg-white border border-gray-400 p-4 report-card" style={{ pageBreakInside: 'avoid' }}>
       <ReportCardHeader student={student} term={term} year={year} />
       
       <table className="w-full border-collapse border border-gray-800 mb-4 text-xs">
@@ -228,31 +303,24 @@ const ReportCardS1S2: React.FC<ReportCardProps> = (props) => {
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">EOT [60%]</th>
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Final score</th>
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Grade</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Descriptor</th>
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Teacher</th>
           </tr>
         </thead>
         <tbody>
-          {grades.map((grade, index) => (
-            <tr key={index}>
-              <td className="border border-gray-800 px-1.5 py-1 text-black">{grade.subject}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade.mot || ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade.eot || ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{grade.final_score || ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{getGradeFromScore(grade.final_score || 0)}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{getDescriptorFromGrade(getGradeFromScore(grade.final_score || 0))}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade.teacher || ''}</td>
-            </tr>
-          ))}
-          <tr>
-            <td className="border border-gray-800 px-1.5 py-1 text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-          </tr>
+          {allSubjects.map((subject, index) => {
+            const grade = gradesMap.get(subject);
+            return (
+              <tr key={index}>
+                <td className="border border-gray-800 px-1.5 py-1 text-black">{subject}</td>
+                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade?.mot || ''}</td>
+                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade?.eot || ''}</td>
+                <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{grade?.final_score || ''}</td>
+                <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{grade ? getGradeFromScore(grade.final_score || 0) : ''}</td>
+                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade ? getDescriptorFromGrade(getGradeFromScore(grade.final_score || 0)) : ''}</td>
+                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade?.teacher || ''}</td>
+              </tr>
+            );
+          })}
           <tr className="bg-gray-100 font-bold">
             <td className="border border-gray-800 px-1.5 py-1 text-black">Overall % average score</td>
             <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
@@ -262,13 +330,12 @@ const ReportCardS1S2: React.FC<ReportCardProps> = (props) => {
             <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
             <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
           </tr>
+          <tr>
+            <td colSpan={7} className="border border-gray-800 px-1.5 py-1 text-black text-xs">Position in class: {ordinal(positionInClass)} out of {totalStudentsInClass || ''} &nbsp; Position in stream: {ordinal(positionInStream)} out of {totalStudentsInStream || ''}</td>
+          </tr>
         </tbody>
       </table>
-      
-      <div className="flex justify-start gap-4 mb-4">
-        <p className="text-black text-xs">Position in class: {positionInClass || ''} out of {totalStudentsInClass || ''}</p>
-        <p className="text-black text-xs">position in stream: {positionInStream || ''} out of {totalStudentsInStream || ''}</p>
-      </div>
+      <div className="mt-2 mb-2 text-sm font-semibold">Promoted to next class</div>
       
       <GradingScale />
       <ReportCardSignatures classTeacher={classTeacher} headTeacher={headTeacher} academicTerm={academicTerm} />
@@ -276,18 +343,50 @@ const ReportCardS1S2: React.FC<ReportCardProps> = (props) => {
   );
 };
 
-const ReportCardS3S4: React.FC<ReportCardProps> = (props) => {
-  const { student, grades, term, year, classTeacher, headTeacher, academicTerm, positionInClass, positionInStream, totalStudentsInClass, totalStudentsInStream } = props;
+interface ReportCardS3S4Props extends ReportCardProps {
+  optionalSubjects?: Array<{ id: string; name: string }>;
+}
+
+const ReportCardS3S4: React.FC<ReportCardS3S4Props> = (props) => {
+  const { student, grades, term, year, classTeacher, headTeacher, academicTerm, positionInClass, positionInStream, totalStudentsInClass, totalStudentsInStream, optionalSubjects } = props;
+  
+  // Fixed subjects for S3-S4 (same as S1-S2)
+  const fixedSubjects = [
+    'Mathematics',
+    'History and Political Education',
+    'English',
+    'Geography',
+    'Physics',
+    'Biology',
+    'Chemistry',
+    'Physical education',
+    'Religious Education (CRE/IRE)',
+    'Entrepreneurship',
+    'Kiswahili',
+  ];
+
+  const gradesMap = new Map<string, Grade>();
+  grades.forEach(grade => {
+    gradesMap.set(grade.subject, grade);
+  });
+
+  // Add optional subjects
+  const allSubjects = [...fixedSubjects];
+  if (optionalSubjects && optionalSubjects.length > 0) {
+    optionalSubjects.forEach(opt => {
+      allSubjects.push(opt.name);
+    });
+  }
+  while (allSubjects.length < fixedSubjects.length + 2) {
+    allSubjects.push('');
+  }
+
   const totalScore = grades.reduce((sum, g) => sum + (g.final_score || 0), 0);
   const averageScore = grades.length > 0 ? Math.round(totalScore / grades.length) : 0;
 
   return (
-    <div className="bg-white border border-gray-400 p-4" style={{ pageBreakInside: 'avoid' }}>
+    <div className="bg-white border border-gray-400 p-4 report-card" style={{ pageBreakInside: 'avoid' }}>
       <ReportCardHeader student={student} term={term} year={year} />
-      
-      <div className="text-center mb-6">
-        <h2 className="text-2xl font-normal text-black">FOR S3 AND S4</h2>
-      </div>
       
       <table className="w-full border-collapse border border-gray-800 mb-4 text-xs">
         <thead>
@@ -297,40 +396,24 @@ const ReportCardS3S4: React.FC<ReportCardProps> = (props) => {
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">EOT [60%]</th>
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Final score</th>
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Grade</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Descriptor</th>
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Teacher</th>
           </tr>
         </thead>
         <tbody>
-          {grades.map((grade, index) => (
-            <tr key={index}>
-              <td className="border border-gray-800 px-1.5 py-1 text-black">{grade.subject}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade.mot || ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade.eot || ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{grade.final_score || ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{getGradeFromScore(grade.final_score || 0)}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{getDescriptorFromGrade(getGradeFromScore(grade.final_score || 0))}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade.teacher || ''}</td>
-            </tr>
-          ))}
-          <tr>
-            <td className="border border-gray-800 px-1.5 py-1 text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-          </tr>
-          <tr>
-            <td className="border border-gray-800 px-1.5 py-1 text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-          </tr>
+          {allSubjects.map((subject, index) => {
+            const grade = gradesMap.get(subject);
+            return (
+              <tr key={index}>
+                <td className="border border-gray-800 px-1.5 py-1 text-black">{subject}</td>
+                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade?.mot || ''}</td>
+                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade?.eot || ''}</td>
+                <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{grade?.final_score || ''}</td>
+                <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{grade ? getGradeFromScore(grade.final_score || 0) : ''}</td>
+                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade ? getDescriptorFromGrade(getGradeFromScore(grade.final_score || 0)) : ''}</td>
+                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade?.teacher || ''}</td>
+              </tr>
+            );
+          })}
           <tr className="bg-gray-100 font-bold">
             <td className="border border-gray-800 px-1.5 py-1 text-black">Overall % average score</td>
             <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
@@ -340,33 +423,70 @@ const ReportCardS3S4: React.FC<ReportCardProps> = (props) => {
             <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
             <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
           </tr>
+          <tr>
+            <td colSpan={7} className="border border-gray-800 px-1.5 py-1 text-black text-xs">Position in class: {ordinal(positionInClass)} out of {totalStudentsInClass || ''} &nbsp; Position in stream: {ordinal(positionInStream)} out of {totalStudentsInStream || ''}</td>
+          </tr>
         </tbody>
       </table>
-      
-      <div className="flex justify-start gap-1 mb-4">
-        <p className="text-black text-xs">Position in class: {positionInClass || ''} out of {totalStudentsInClass || ''}</p>
-        <p className="text-black text-xs">position in stream: {positionInStream || ''} out of {totalStudentsInStream || ''}</p>
-      </div>
-      
-      <p className="text-black text-xs mb-4">Result: </p>
-      
+      <div className="mt-2 mb-2 text-sm font-semibold">Promoted to next class</div>
+
       <GradingScale />
       <ReportCardSignatures classTeacher={classTeacher} headTeacher={headTeacher} academicTerm={academicTerm} />
     </div>
   );
 };
 
-const ReportCardS5S6: React.FC<ReportCardProps> = (props) => {
-  const { student, grades, term, year, classTeacher, headTeacher, academicTerm } = props;
+interface ReportCardS5S6Props extends ReportCardProps {
+  assignedSubjects?: Array<{ id: string; name: string; subject_type: string }>;
+}
+
+const ReportCardS5S6: React.FC<ReportCardS5S6Props> = (props) => {
+  const { student, grades, term, year, classTeacher, headTeacher, academicTerm, assignedSubjects } = props;
+
+  // Create a map of grades by subject name
+  const gradesMap = new Map<string, Grade>();
+  grades.forEach(grade => {
+    gradesMap.set(grade.subject, grade);
+  });
+
+  // Display assigned subjects from combination
+  const displaySubjects = assignedSubjects?.filter(s => 
+    s.subject_type === 'principal' || s.subject_type === 'subsidiary' || s.subject_type === 'compulsory'
+  ) || [];
+
+  // Separate principal, general paper, and subsidiary
+  const principals = displaySubjects.filter(s => s.subject_type === 'principal');
+  const subsidiary = displaySubjects.find(s => s.subject_type === 'subsidiary');
+  const generalPaper = displaySubjects.find(s => s.subject_type === 'compulsory');
+
+  // Build the rows for display
+  const rowsToDisplay: Array<{ name: string; grade?: Grade; isSpecial?: boolean }> = [];
+  
+  // Add principal subjects
+  principals.forEach(p => {
+    rowsToDisplay.push({ name: p.name, grade: gradesMap.get(p.name) });
+  });
+
+  // Add General Paper if exists
+  if (generalPaper) {
+    rowsToDisplay.push({ name: generalPaper.name, grade: gradesMap.get(generalPaper.name), isSpecial: true });
+  }
+
+  // Add subsidiary if exists
+  if (subsidiary) {
+    rowsToDisplay.push({ name: subsidiary.name, grade: gradesMap.get(subsidiary.name), isSpecial: true });
+  }
+
+  // Ensure at least 5 rows (3 principals + general paper + subsidiary slot)
+  while (rowsToDisplay.length < 5) {
+    rowsToDisplay.push({ name: '' });
+  }
+
   const totalPoints = grades.reduce((sum, g) => sum + (g.points || 0), 0);
 
   return (
-    <div className="bg-white border border-gray-400 p-4" style={{ pageBreakInside: 'avoid' }}>
+    <div className="bg-white border border-gray-400 p-4 report-card" style={{ pageBreakInside: 'avoid' }}>
       <ReportCardHeader student={student} term={term} year={year} />
-      
-      <div className="text-center mb-6">
-        <h2 className="text-2xl font-normal text-black">FOR S5 AND S6</h2>
-      </div>
       
       <table className="w-full border-collapse border border-gray-800 mb-4 text-xs">
         <thead>
@@ -376,69 +496,24 @@ const ReportCardS5S6: React.FC<ReportCardProps> = (props) => {
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">EOT [60%]</th>
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Final score</th>
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Grade</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Descriptor</th>
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Teacher</th>
           </tr>
         </thead>
         <tbody>
-          {grades.map((grade, index) => (
+          {rowsToDisplay.map((row, index) => (
             <tr key={index}>
-              <td className="border border-gray-800 px-1.5 py-1 text-black">{grade.subject}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade.mot || ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade.eot || ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{grade.final_score || ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{getGradeFromScore(grade.final_score || 0)}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{getDescriptorFromGrade(getGradeFromScore(grade.final_score || 0))}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade.teacher || ''}</td>
+              <td className="border border-gray-800 px-1.5 py-1 text-black">{row.name}</td>
+              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{row.grade?.mot || ''}</td>
+              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{row.grade?.eot || ''}</td>
+              <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{row.grade?.final_score || ''}</td>
+              <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{row.grade ? getGradeFromScore(row.grade.final_score || 0) : ''}</td>
+              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{row.grade?.teacher || ''}</td>
             </tr>
           ))}
-          <tr>
-            <td className="border border-gray-800 px-1.5 py-1 text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-          </tr>
-          <tr>
-            <td className="border border-gray-800 px-1.5 py-1 text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-          </tr>
-          <tr>
-            <td className="border border-gray-800 px-1.5 py-1 text-black">General Paper</td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-          </tr>
-          <tr>
-            <td className="border border-gray-800 px-1.5 py-1 text-black">Sub ICT or Sub Math</td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-          </tr>
-          <tr className="bg-gray-100 font-bold">
-            <td className="border border-gray-800 px-1.5 py-1 text-black">Total Points: {totalPoints || ''}</td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-          </tr>
         </tbody>
       </table>
+      <div className="mt-2 mb-1 text-sm font-semibold">Total Points: {totalPoints || '0'}</div>
+      <div className="mt-1 mb-2 text-sm font-semibold">Promoted to next class</div>
       
       <GradingScale />
       <ReportCardSignatures classTeacher={classTeacher} headTeacher={headTeacher} academicTerm={academicTerm} />
@@ -449,15 +524,17 @@ const ReportCardS5S6: React.FC<ReportCardProps> = (props) => {
 const ReportCard: React.FC<ReportCardProps> = (props) => {
   const classLevel = getClassLevel(props.student.class);
   
+  const { optionalSubjects, assignedSubjects } = props;
+  
   switch (classLevel) {
     case 'S1-S2':
-      return <ReportCardS1S2 {...props} />;
+      return <ReportCardS1S2 {...props} optionalSubjects={optionalSubjects} />;
     case 'S3-S4':
-      return <ReportCardS3S4 {...props} />;
+      return <ReportCardS3S4 {...props} optionalSubjects={optionalSubjects} />;
     case 'S5-S6':
-      return <ReportCardS5S6 {...props} />;
+      return <ReportCardS5S6 {...props} assignedSubjects={assignedSubjects} />;
     default:
-      return <ReportCardS1S2 {...props} />;
+      return <ReportCardS1S2 {...props} optionalSubjects={optionalSubjects} />;
   }
 };
 
@@ -475,6 +552,12 @@ export default function ReportsPage() {
   const [classes, setClasses] = useState<any[]>([]);
   const [allStreams, setAllStreams] = useState<any[]>([]);
   const [streams, setStreams] = useState<any[]>([]);
+  const [previewStudent, setPreviewStudent] = useState<Student | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewOptionalSubjects, setPreviewOptionalSubjects] = useState<Array<{ id: string; name: string }>>([]);
+  const [previewAssignedSubjects, setPreviewAssignedSubjects] = useState<Array<{ id: string; name: string; subject_type: string }>>([]);
+  const [previewComments, setPreviewComments] = useState<{ class_teacher_comment?: string; head_teacher_comment?: string } | null>(null);
+  const [previewAcademicTerm, setPreviewAcademicTerm] = useState<AcademicTerm | null>(null);
 
   useEffect(() => {
     fetchClassesAndStreams();
@@ -547,18 +630,105 @@ export default function ReportsPage() {
     }
   }, [selectedTerm, selectedYear, selectedClass, selectedStream]);
 
+  // Fetch optional/assigned subjects when preview student changes
+  useEffect(() => {
+    if (!previewStudent) {
+      setPreviewOptionalSubjects([]);
+      setPreviewAssignedSubjects([]);
+      return;
+    }
+
+    const fetchSubjectData = async () => {
+      try {
+        const classLevel = getClassLevel(previewStudent.class);
+        
+        if (classLevel === 'S1-S2' || classLevel === 'S3-S4') {
+          // Fetch optional subjects for S1-S4
+          const response = await fetch(`/api/student-optional-subjects?student_id=${previewStudent.id}`);
+          if (response.ok) {
+            const result = await response.json();
+            const optionalSubjects = (result.data || []).map((item: any) => ({
+              id: item.id,
+              name: item.subjects?.name || ''
+            }));
+            setPreviewOptionalSubjects(optionalSubjects);
+          }
+        } else if (classLevel === 'S5-S6') {
+          // Fetch assigned subjects for S5-S6
+          const response = await fetch(`/api/student-subjects?student_id=${previewStudent.id}`);
+          if (response.ok) {
+            const result = await response.json();
+            const assignedSubjects = (result.data || []).map((item: any) => ({
+              id: item.id,
+              name: item.subjects?.name || '',
+              subject_type: item.subject_type || item.subjects?.subject_type || ''
+            }));
+            setPreviewAssignedSubjects(assignedSubjects);
+          }
+        }
+
+        // Fetch comments and term dates for the preview
+        const reportResponse = await fetch(`/api/report?student_id=${previewStudent.id}&term=${selectedTerm}&year=${selectedYear}`);
+        if (reportResponse.ok) {
+          const reportResult = await reportResponse.json();
+          const comments = reportResult.data?.comments || {};
+          setPreviewComments({
+            class_teacher_comment: comments.class_teacher_comment || comments.class_teacher_comment_text || comments.class_teacher || comments.class_teacher_comments || '',
+            head_teacher_comment: comments.head_teacher_comment || comments.head_teacher_comment_text || comments.head_teacher || comments.head_teacher_comments || ''
+          });
+        } else {
+          setPreviewComments(null);
+        }
+
+        const academicResponse = await fetch('/api/academic/overview');
+        if (academicResponse.ok) {
+          const overview = await academicResponse.json();
+          const yearItem = (overview.academic_years || []).find((y: any) => y.year_label === selectedYear);
+          const currentTermNumber = Number(selectedTerm);
+          if (yearItem) {
+            const currentTerm = (overview.terms || []).find((t: any) => Number(t.term_number) === currentTermNumber && t.year_id === yearItem.id);
+            let nextTermStart = '';
+
+            if (currentTerm) {
+              const nextTerm = (overview.terms || []).find((t: any) => Number(t.term_number) === currentTermNumber + 1 && t.year_id === yearItem.id)
+                || (currentTermNumber === 3 ? (overview.terms || []).find((t: any) => Number(t.term_number) === 1 && overview.academic_years?.find((y: any) => y.id === t.year_id)?.year_label === String(Number(selectedYear) + 1)) : null);
+
+              nextTermStart = nextTerm?.start_date || '';
+              setPreviewAcademicTerm({
+                end_date: currentTerm.end_date,
+                next_term_start_date: nextTermStart
+              });
+            } else {
+              setPreviewAcademicTerm(null);
+            }
+          } else {
+            setPreviewAcademicTerm(null);
+          }
+        } else {
+          setPreviewAcademicTerm(null);
+        }
+      } catch (error) {
+        console.error('Error fetching subject data:', error);
+      }
+    };
+
+    fetchSubjectData();
+  }, [previewStudent, selectedTerm, selectedYear]);
+
   const fetchReportData = async () => {
     if (!selectedStream) return;
     
     try {
       setLoading(true);
       
+      let transformedStudents: Student[] = [];
+      
       if (selectedClass === 'ALL' && selectedStream === 'ALL') {
         const studentsResponse = await fetch('/api/students');
         const studentsResult = await studentsResponse.json();
         
         if (studentsResponse.ok) {
-          const transformedStudents = (studentsResult.data || []).map((student: any) => ({
+          transformedStudents = (studentsResult.data || []).map((student: any) => ({
             ...student,
             class: student.classes?.name || student.class_id || 'Unknown',
             stream: student.streams?.name || student.stream_id || 'Unknown'
@@ -571,7 +741,10 @@ export default function ReportsPage() {
         const gradesResult = await gradesResponse.json();
         
         if (gradesResponse.ok) {
-          setGrades(gradesResult.data?.grades || []);
+          const normalized = normalizeReportGrades(gradesResult.data?.grades || []);
+          setGrades(normalized);
+          setIsPublished(Boolean(gradesResult.data?.is_published));
+          computePositions(transformedStudents, normalized);
         }
       } else {
         const params = new URLSearchParams();
@@ -598,14 +771,17 @@ export default function ReportsPage() {
         const gradesParams = new URLSearchParams();
         gradesParams.append('term', selectedTerm);
         gradesParams.append('year', selectedYear);
-        if (selectedClass !== 'ALL') gradesParams.append('class', selectedClass);
-        if (selectedStream !== 'ALL') gradesParams.append('stream', selectedStream);
+        if (selectedClass !== 'ALL') gradesParams.append('class_id', selectedClass.toLowerCase());
+        if (selectedStream !== 'ALL') gradesParams.append('stream_id', selectedStream);
         
         const gradesResponse = await fetch(`/api/reports?${gradesParams.toString()}`);
         const gradesResult = await gradesResponse.json();
         
         if (gradesResponse.ok) {
-          setGrades(gradesResult.data?.grades || []);
+          const normalized = normalizeReportGrades(gradesResult.data?.grades || []);
+          setGrades(normalized);
+          setIsPublished(Boolean(gradesResult.data?.is_published));
+          computePositions(transformedStudents, normalized);
         }
       }
     } catch (error) {
@@ -613,6 +789,93 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helpers for computing positions
+
+  const computePositions = (studentList: Student[], gradeList: Grade[]) => {
+    // Build maps for class and stream groups
+    const byClass: { [key: string]: string[] } = {};
+    const byStream: { [key: string]: string[] } = {};
+
+    // compute metrics per student
+    const metrics: { [studentId: string]: { avg: number; points: number } } = {};
+
+    for (const s of studentList) {
+      byClass[s.class] = byClass[s.class] || [];
+      byClass[s.class].push(s.id);
+      const streamKey = `${s.class}-${s.stream}`;
+      byStream[streamKey] = byStream[streamKey] || [];
+      byStream[streamKey].push(s.id);
+    }
+
+    // aggregate grades
+    const gradeMap: { [id: string]: Grade[] } = {};
+    for (const g of gradeList) {
+      gradeMap[g.student_id] = gradeMap[g.student_id] || [];
+      gradeMap[g.student_id].push(g);
+    }
+
+    for (const s of studentList) {
+      const g = gradeMap[s.id] || [];
+      const totalScore = g.reduce((sum, x) => sum + (x.final_score || 0), 0);
+      const avg = g.length > 0 ? Math.round(totalScore / g.length) : 0;
+      const totalPoints = g.reduce((sum, x) => sum + (x.points || 0), 0);
+      metrics[s.id] = { avg, points: totalPoints };
+    }
+
+    // For each class, sort and assign positions depending on class level
+    const classPositions: { [id: string]: number } = {};
+    const streamPositions: { [id: string]: number } = {};
+
+    const getClassLevelKey = (clsName: string) => clsName?.toUpperCase();
+
+    for (const cls of Object.keys(byClass)) {
+      const ids = byClass[cls];
+      // decide ranking metric: S5/S6 -> points, else avg
+      const usePoints = cls.toUpperCase() === 'S5' || cls.toUpperCase() === 'S6';
+      const sorted = [...ids].sort((a, b) => {
+        const ma = metrics[a] || { avg: 0, points: 0 };
+        const mb = metrics[b] || { avg: 0, points: 0 };
+        const va = usePoints ? ma.points : ma.avg;
+        const vb = usePoints ? mb.points : mb.avg;
+        return vb - va; // descending
+      });
+      sorted.forEach((studentId, idx) => {
+        classPositions[studentId] = idx + 1;
+      });
+    }
+
+    for (const streamKey of Object.keys(byStream)) {
+      const ids = byStream[streamKey];
+      // stream's class is left part
+      const cls = streamKey.split('-')[0];
+      const usePoints = cls.toUpperCase() === 'S5' || cls.toUpperCase() === 'S6';
+      const sorted = [...ids].sort((a, b) => {
+        const ma = metrics[a] || { avg: 0, points: 0 };
+        const mb = metrics[b] || { avg: 0, points: 0 };
+        const va = usePoints ? ma.points : ma.avg;
+        const vb = usePoints ? mb.points : mb.avg;
+        return vb - va;
+      });
+      sorted.forEach((studentId, idx) => {
+        streamPositions[studentId] = idx + 1;
+      });
+    }
+
+    // attach positions to students in-place by extending student objects
+    const updated = studentList.map(s => ({ ...s, _positionInClass: classPositions[s.id] || undefined, _positionInStream: streamPositions[s.id] || undefined }));
+    setStudents(updated);
+
+    // store helper maps on window for preview lookup (simple approach)
+    (window as any).__report_positions = {
+      classPositions,
+      streamPositions,
+      totals: {
+        byClass: Object.fromEntries(Object.entries(byClass).map(([k, v]) => [k, v.length])),
+        byStream: Object.fromEntries(Object.entries(byStream).map(([k, v]) => [k, v.length]))
+      }
+    };
   };
 
   const handlePublishResults = async () => {
@@ -656,6 +919,21 @@ export default function ReportsPage() {
     }
   };
 
+  const handlePrintReport = (student: Student) => {
+    // Set the student and trigger print view immediately
+    setPreviewStudent(student);
+    setShowPreview(true);
+    // Schedule print after component renders
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
+
+  const handleClosePreview = () => {
+    setShowPreview(false);
+    setPreviewStudent(null);
+  };
+
   return (
     <div className="h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex overflow-hidden">
       <style jsx>{`
@@ -666,6 +944,32 @@ export default function ReportsPage() {
           body {
             margin: 0;
             padding: 0;
+            background: white;
+          }
+          .bg-white {
+            background-color: white !important;
+          }
+          .fixed {
+            position: static !important;
+          }
+          .bg-black {
+            background-color: white !important;
+          }
+          .inset-0 {
+            position: static !important;
+          }
+          @page {
+            margin: 6mm;
+            size: A4;
+          }
+          body, .report-card, .report-card * {
+            font-size: 11px !important;
+          }
+          .report-card { padding: 6px !important; }
+        }
+        @media screen {
+          .print-only {
+            display: none;
           }
         }
       `}</style>
@@ -791,6 +1095,11 @@ export default function ReportsPage() {
                     {isPublished ? 'Re-publish Results' : 'Publish Results'}
                   </button>
                 )}
+                {selectedClass === 'ALL' && (
+                  <div className="text-sm text-gray-600 mt-2">
+                    Select a specific class before publishing. The publish button appears after you choose a class.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -828,7 +1137,7 @@ export default function ReportsPage() {
                         </div>
                       </div>
                       <button
-                        onClick={() => window.print()}
+                        onClick={() => handlePrintReport(student)}
                         className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center text-sm"
                       >
                         <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -853,20 +1162,51 @@ export default function ReportsPage() {
             </div>
           )}
 
-          <div className="print-only">
-            {students.map((student) => (
-              <div key={student.id} className="mb-8">
-                <ReportCard
-                  student={student}
-                  grades={grades.filter(g => g.student_id === student.id)}
-                  term={selectedTerm}
-                  year={selectedYear}
-                  classTeacher={classTeachers[`${student.class}-${student.stream}`] || 'Not Assigned'}
-                  headTeacher="Mr. ISABIRYE SALEH"
-                />
+          {showPreview && previewStudent && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 border-b border-gray-200 p-4 flex justify-between items-center no-print">
+                  <h3 className="text-lg font-bold text-white">Report Card - {previewStudent.full_name}</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => window.print()}
+                      className="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors flex items-center font-semibold"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                      Print Now
+                    </button>
+                    <button
+                      onClick={handleClosePreview}
+                      className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors font-semibold"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <ReportCard
+                    student={previewStudent}
+                    grades={grades.filter(g => g.student_id === previewStudent.id)}
+                    term={selectedTerm}
+                    year={selectedYear}
+                    classTeacher={classTeachers[`${previewStudent.class}-${previewStudent.stream}`] || 'Not Assigned'}
+                    headTeacher="Mr. ISABIRYE SALEH"
+                    classTeacherComment={previewComments?.class_teacher_comment || ''}
+                    headTeacherComment={previewComments?.head_teacher_comment || ''}
+                    academicTerm={previewAcademicTerm || undefined}
+                    optionalSubjects={previewOptionalSubjects}
+                    assignedSubjects={previewAssignedSubjects}
+                    positionInClass={(previewStudent as any)?._positionInClass || (window as any).__report_positions?.classPositions?.[previewStudent.id]}
+                    positionInStream={(previewStudent as any)?._positionInStream || (window as any).__report_positions?.streamPositions?.[previewStudent.id]}
+                    totalStudentsInClass={(window as any).__report_positions?.totals?.byClass?.[previewStudent.class]}
+                    totalStudentsInStream={(window as any).__report_positions?.totals?.byStream?.[`${previewStudent.class}-${previewStudent.stream}`]}
+                  />
+                </div>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

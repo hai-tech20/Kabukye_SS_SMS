@@ -233,7 +233,9 @@ export default function StudentDashboard() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subject</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Paper Scores</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">P1</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">P2</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">P3</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase text-center">BOT</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase text-center">MOT</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase text-center">EOT</th>
@@ -250,28 +252,9 @@ export default function StudentDashboard() {
                             {mark.subjects?.name || `Subject ID: ${mark.subject_id}`}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex flex-wrap gap-1">
-                            {mark.p1_score !== undefined && mark.p1_score !== null && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
-                                P1: {mark.p1_score}
-                              </span>
-                            )}
-                            {mark.p2_score !== undefined && mark.p2_score !== null && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
-                                P2: {mark.p2_score}
-                              </span>
-                            )}
-                            {mark.p3_score !== undefined && mark.p3_score !== null && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
-                                P3: {mark.p3_score}
-                              </span>
-                            )}
-                            {!(mark.p1_score || mark.p2_score || mark.p3_score) && (
-                              <span className="text-xs text-gray-400 italic">No papers saved</span>
-                            )}
-                          </div>
-                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{mark.p1_score ?? '-'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{mark.p2_score ?? '-'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{mark.p3_score ?? '-'}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600">
                           {mark.bot_score ?? '-'}
                         </td>

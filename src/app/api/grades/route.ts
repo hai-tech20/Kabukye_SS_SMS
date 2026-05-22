@@ -132,14 +132,53 @@ export async function POST(request: NextRequest) {
     const teacherId = session.id;
     console.log('Grades API - Teacher ID:', teacherId);
 
+    if (!Array.isArray(gradesData) || gradesData.length === 0) {
+      return NextResponse.json({ error: 'No grades provided' }, { status: 400 });
+    }
+
+    const sampleGrade = gradesData[0];
+    const academicYear = sampleGrade.academic_year;
+    const term = sampleGrade.term;
+    const classId = sampleGrade.class_id;
+    const streamId = sampleGrade.stream_id;
+
+    const { data: publishedReports, error: publishedError } = await supabaseAdmin
+      .from('published_reports')
+      .select('id')
+      .eq('academic_year', academicYear)
+      .eq('term', term)
+      .eq('class_id', classId)
+      .eq('stream_id', streamId)
+      .limit(1);
+
+    if (publishedError) {
+      console.error('Grades API - Published report lookup error:', publishedError);
+      throw publishedError;
+    }
+
+    if (publishedReports && publishedReports.length > 0) {
+      return NextResponse.json(
+        { error: 'Cannot edit marks after results have been published for this class and stream.' },
+        { status: 403 }
+      );
+    }
+
     // Get report settings for weights
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from('report_settings')
-      .select('mot_weight, eot_weight, assessment_count')
-      .eq('is_published', true)
+      .select('mot_weight, eot_weight, assessment_count, is_published')
+      .eq('academic_year', academicYear)
+      .eq('term', term)
       .single();
 
     console.log('Grades API - Settings:', settings, 'Error:', settingsError);
+
+    if (settings?.is_published) {
+      return NextResponse.json(
+        { error: 'Cannot edit marks because this term has been published.' },
+        { status: 403 }
+      );
+    }
 
     const { data: gradingScales, error: scalesError } = await supabaseAdmin
       .from('grading_scales')

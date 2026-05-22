@@ -135,6 +135,10 @@ export default function TeacherDashboard() {
     return students.filter(student => student.stream_id === selectedStream);
   };
 
+  const teacherClassId = teacher?.class_teacher_class_id?.toString().toLowerCase().trim();
+  const isClassTeacherForOLevel = !!teacherClassId && ['s1', 's2', 's3', 's4'].includes(teacherClassId);
+  const isClassTeacherForALevel = !!teacherClassId && ['s5', 's6'].includes(teacherClassId);
+
   return (
     <div className="h-screen bg-gray-50 overflow-hidden flex">
       {/* Sidebar - Fixed Position */}
@@ -291,6 +295,42 @@ export default function TeacherDashboard() {
           <div className="bg-white shadow-md rounded-lg p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {teacher?.is_class_teacher && isClassTeacherForOLevel && (
+                <Link
+                  href="/dashboard/teacher/optional-subjects"
+                  className="bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition-colors"
+                >
+                  <div className="flex items-center">
+                    <div className="p-3 bg-blue-100 rounded-full mr-4">
+                      <svg className="w-6 h-6 text-blue-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Manage Optional Subjects</h3>
+                      <p className="text-sm text-gray-600 mt-1">Assign and update O-Level optionals for your class</p>
+                    </div>
+                  </div>
+                </Link>
+              )}
+              {teacher?.is_class_teacher && isClassTeacherForALevel && (
+                <Link
+                  href="/dashboard/teacher/combinations"
+                  className="bg-purple-50 border border-purple-200 rounded-lg p-4 hover:bg-purple-100 transition-colors"
+                >
+                  <div className="flex items-center">
+                    <div className="p-3 bg-purple-100 rounded-full mr-4">
+                      <svg className="w-6 h-6 text-purple-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c1.104 0 2-.896 2-2s-.896-2-2-2-2 .896-2 2 .896 2 2 2zm0 2c-2.21 0-4 1.79-4 4v1h8v-1c0-2.21-1.79-4-4-4zM5 20h14" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Manage Combinations</h3>
+                      <p className="text-sm text-gray-600 mt-1">Update subject combinations for your S5/S6 class</p>
+                    </div>
+                  </div>
+                </Link>
+              )}
               {teacher?.is_class_teacher && (
                 <Link
                   href="/dashboard/teacher/class-results"

@@ -56,6 +56,9 @@ export default function StudentsManagement() {
   const [subsidiary, setSubsidiary] = useState('');
   const [manualCombination, setManualCombination] = useState('');
   const [studentDetailSubjects, setStudentDetailSubjects] = useState<any[]>([]);
+  const [optional1, setOptional1] = useState('');
+  const [optional2, setOptional2] = useState('');
+  const [studentOptionalSubjects, setStudentOptionalSubjects] = useState<any[]>([]);
   
   // Photo upload state for edit mode
   const [newPhotoFile, setNewPhotoFile] = useState<File | null>(null);
@@ -265,31 +268,8 @@ export default function StudentsManagement() {
         console.log('Unique subjects after dedup:', uniqueSubjects.length);
         console.log('Sample subjects:', uniqueSubjects.slice(0, 10).map(s => ({ name: s.name, class_id: s.class_id })));
         
-        // Include only A-Level subjects (s5, s6, null) - exclude O-Level (s1-s4)
-        let keptCount = 0;
-        let filteredCount = 0;
-        const aLevelSubjects = uniqueSubjects.filter(
-          (s: Subject) => {
-            // Normalize class_id for comparison (handle case variations and whitespace)
-            const classId = (s.class_id || '').toString().toLowerCase().trim();
-            // Include if class_id is s5, s6, null, or empty
-            const isALevel = classId === 's5' || classId === 's6' || classId === '' || classId === 'null';
-            
-            // Debug logging to see what's being filtered
-            if (isALevel) {
-              keptCount++;
-              console.log(`✓ KEEP: ${s.name} (class_id: "${s.class_id}", type: ${s.subject_type})`);
-            } else {
-              filteredCount++;
-              console.log(`✗ FILTER OUT: ${s.name} (class_id: "${s.class_id}")`);
-            }
-            return isALevel;
-          }
-        );
-        console.log(`A-Level filtering: KEPT=${keptCount}, FILTERED OUT=${filteredCount}`);
-        console.log('A-Level subjects to display:', aLevelSubjects.length);
-        console.log('Subject names:', aLevelSubjects.map(s => `${s.name} (${s.id})`).sort());
-        setSubjects(aLevelSubjects);
+        // Keep all subjects for the selected class so O-Level forms can include S1-S4 optionals too
+        setSubjects(uniqueSubjects);
       }
     } catch (error) {
       console.error('Error fetching subjects:', error);
@@ -357,6 +337,24 @@ export default function StudentsManagement() {
         const result = await response.json();
         const studentId = result.data?.id;
         
+        // If O-Level student (S1-S4) and optional subjects selected, assign them
+        if (studentId && (modalClassId === 's1' || modalClassId === 's2' || modalClassId === 's3' || modalClassId === 's4')) {
+          if (optional1) {
+            await fetch('/api/student-optional-subjects', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ student_id: studentId, subject_id: optional1 })
+            });
+          }
+          if (optional2) {
+            await fetch('/api/student-optional-subjects', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ student_id: studentId, subject_id: optional2 })
+            });
+          }
+        }
+        
         // If A-Level student and subjects selected, assign them
         if (studentId && (modalClassId === 's5' || modalClassId === 's6') && principal1 && principal2 && principal3 && subsidiary) {
           const subjectsToAssign = [
@@ -397,6 +395,8 @@ export default function StudentsManagement() {
         setPrincipal3('');
         setSubsidiary('');
         setManualCombination('');
+        setOptional1('');
+        setOptional2('');
         fetchStudents();
         alert(result.message || 'Student added successfully');
       } else {
@@ -899,6 +899,62 @@ export default function StudentsManagement() {
                       {(!modalClassId || (modalClassId !== 's5' && modalClassId !== 's6')) && (
                         <input type="hidden" name="subject_combination" value="" />
                       )}
+                      
+                      {/* Optional Subjects Selection for O-Level Students (S1-S4) */}
+                      {modalClassId && (modalClassId === 's1' || modalClassId === 's2' || modalClassId === 's3' || modalClassId === 's4') && (
+                        <div className="col-span-2 border-t pt-4 mt-2">
+                          <label className="block text-sm font-medium text-gray-900 mb-3">
+                            Select Optional Subjects <span className="text-gray-500">(up to 2)</span>
+                          </label>
+                          
+                          {/* Optional Subject 1 */}
+                          <div className="mb-3">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Optional Subject 1</label>
+                            <select
+                              value={optional1}
+                              onChange={(e) => setOptional1(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-900 focus:border-blue-900 text-gray-900"
+                            >
+                              <option value="">-- None --</option>
+                              {subjects
+                                .filter(s => {
+                                  const subjectClassId = (s.class_id || '').toString().toLowerCase().trim();
+                                  const selectedClassId = (modalClassId || '').toString().toLowerCase().trim();
+                                  return subjectClassId === selectedClassId;
+                                })
+                                .filter(s => s.id !== optional2) // Don't show if already selected as optional2
+                                .sort((a, b) => a.name.localeCompare(b.name))
+                                .map(s => (
+                                  <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                            </select>
+                          </div>
+                          
+                          {/* Optional Subject 2 */}
+                          <div className="mb-3">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Optional Subject 2</label>
+                            <select
+                              value={optional2}
+                              onChange={(e) => setOptional2(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-900 focus:border-blue-900 text-gray-900"
+                            >
+                              <option value="">-- None --</option>
+                              {subjects
+                                .filter(s => {
+                                  const subjectClassId = (s.class_id || '').toString().toLowerCase().trim();
+                                  const selectedClassId = (modalClassId || '').toString().toLowerCase().trim();
+                                  return subjectClassId === selectedClassId;
+                                })
+                                .filter(s => s.id !== optional1) // Don't show if already selected as optional1
+                                .sort((a, b) => a.name.localeCompare(b.name))
+                                .map(s => (
+                                  <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+                      
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">SchoolPay Code</label>
                         <input
