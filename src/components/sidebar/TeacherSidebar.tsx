@@ -23,6 +23,7 @@ export default function TeacherSidebar({ sidebarOpen, setSidebarOpen }: TeacherS
   const [internalSidebarOpen, setInternalSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [teacher, setTeacher] = useState<{ is_class_teacher?: boolean; class_teacher_class_id?: string } | null>(null);
+  const [loadingTeacher, setLoadingTeacher] = useState(true);
   const pathname = usePathname();
   const isControlled = typeof sidebarOpen === 'boolean' && typeof setSidebarOpen === 'function';
   const desktopOpen = isControlled ? sidebarOpen : internalSidebarOpen;
@@ -34,9 +35,11 @@ export default function TeacherSidebar({ sidebarOpen, setSidebarOpen }: TeacherS
         if (!res.ok) return;
         const json = await res.json();
         setTeacher(json);
-      } catch (error) {
-        console.error('Failed to fetch teacher session for sidebar', error);
-      }
+        } catch (error) {
+          console.error('Failed to fetch teacher session for sidebar', error);
+        } finally {
+          setLoadingTeacher(false);
+        }
     };
     fetchTeacher();
   }, []);
@@ -96,17 +99,28 @@ export default function TeacherSidebar({ sidebarOpen, setSidebarOpen }: TeacherS
         }`}
       >
         <nav className="flex-1 py-4">
-          {navItems.filter((item) => {
-              if (item.href === '/dashboard/teacher/optional-subjects') {
-                const classId = teacher?.class_teacher_class_id?.toString().toLowerCase().trim();
-                return teacher?.is_class_teacher && ['s1', 's2', 's3', 's4'].includes(classId || '');
+          {(() => {
+            const base = ['/dashboard/teacher', '/dashboard/teacher/marks', '/dashboard/teacher/grades'];
+            let allowed: string[] = [];
+
+            if (loadingTeacher) {
+              // While loading, show base items to avoid flicker
+              allowed = base;
+            } else if (!teacher || !teacher.is_class_teacher) {
+              // Not a class teacher: only base pages
+              allowed = base;
+            } else {
+              const classId = teacher.class_teacher_class_id?.toString().toLowerCase().trim();
+              if (['s1', 's2', 's3', 's4'].includes(classId || '')) {
+                allowed = [...base, '/dashboard/teacher/optional-subjects'];
+              } else if (['s5', 's6'].includes(classId || '')) {
+                allowed = [...base, '/dashboard/teacher/combinations'];
+              } else {
+                allowed = base;
               }
-              if (item.href === '/dashboard/teacher/combinations') {
-                const classId = teacher?.class_teacher_class_id?.toString().toLowerCase().trim();
-                return teacher?.is_class_teacher && ['s5', 's6'].includes(classId || '');
-              }
-              return true;
-            }).map((item) => (
+            }
+
+            return navItems.filter(item => allowed.includes(item.href)).map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -120,7 +134,8 @@ export default function TeacherSidebar({ sidebarOpen, setSidebarOpen }: TeacherS
               </svg>
               <span>{item.label}</span>
             </Link>
-          ))}
+            ));
+          })()}
         </nav>
         <div className="p-4 border-t border-blue-800 space-y-2">
           <button 
@@ -169,17 +184,26 @@ export default function TeacherSidebar({ sidebarOpen, setSidebarOpen }: TeacherS
 
         {/* Navigation */}
         <nav className="flex-1 py-4 overflow-y-auto">
-          {navItems.filter((item) => {
-              if (item.href === '/dashboard/teacher/optional-subjects') {
-                const classId = teacher?.class_teacher_class_id?.toString().toLowerCase().trim();
-                return teacher?.is_class_teacher && ['s1', 's2', 's3', 's4'].includes(classId || '');
+          {(() => {
+            const base = ['/dashboard/teacher', '/dashboard/teacher/marks', '/dashboard/teacher/grades'];
+            let allowed: string[] = [];
+
+            if (loadingTeacher) {
+              allowed = base;
+            } else if (!teacher || !teacher.is_class_teacher) {
+              allowed = base;
+            } else {
+              const classId = teacher.class_teacher_class_id?.toString().toLowerCase().trim();
+              if (['s1', 's2', 's3', 's4'].includes(classId || '')) {
+                allowed = [...base, '/dashboard/teacher/optional-subjects'];
+              } else if (['s5', 's6'].includes(classId || '')) {
+                allowed = [...base, '/dashboard/teacher/combinations'];
+              } else {
+                allowed = base;
               }
-              if (item.href === '/dashboard/teacher/combinations') {
-                const classId = teacher?.class_teacher_class_id?.toString().toLowerCase().trim();
-                return teacher?.is_class_teacher && ['s5', 's6'].includes(classId || '');
-              }
-              return true;
-            }).map((item) => (
+            }
+
+            return navItems.filter(item => allowed.includes(item.href)).map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -196,7 +220,8 @@ export default function TeacherSidebar({ sidebarOpen, setSidebarOpen }: TeacherS
                 {item.label}
               </span>
             </Link>
-          ))}
+            ));
+          })()}
         </nav>
 
         {/* Logout */}
