@@ -9,6 +9,7 @@ interface Teacher {
   full_name: string;
   is_class_teacher: boolean;
   class_teacher_class_id?: string;
+  class_teacher_stream_id?: string;
 }
 
 interface Student {
@@ -64,6 +65,7 @@ export default function TeacherCombinationsPage() {
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
   const [studentSubjects, setStudentSubjects] = useState<StudentSubjectRecord[]>([]);
   const [draftAssignments, setDraftAssignments] = useState<Record<string, StudentAssignmentDraft>>({});
+  const [initialDrafts, setInitialDrafts] = useState<Record<string, StudentAssignmentDraft>>({});
   const [isSaving, setIsSaving] = useState<Record<string, boolean>>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -80,8 +82,9 @@ export default function TeacherCombinationsPage() {
     [subjects]
   );
 
-  const fetchStudents = useCallback(async (classIdentifier: string) => {
-    const response = await fetch(`/api/students?class_id=${classIdentifier}`);
+  const fetchStudents = useCallback(async (classIdentifier: string, streamIdentifier?: string) => {
+    const streamQuery = streamIdentifier ? `&stream_id=${streamIdentifier}` : '';
+    const response = await fetch(`/api/students?class_id=${classIdentifier}${streamQuery}`);
     const result = await response.json();
     if (response.ok) {
       setStudents(result.data || []);
@@ -111,8 +114,9 @@ export default function TeacherCombinationsPage() {
     throw new Error(result.error || 'Failed to fetch subjects');
   }, []);
 
-  const fetchStudentSubjects = useCallback(async (classIdentifier: string) => {
-    const response = await fetch(`/api/student-subjects?class_id=${classIdentifier}`);
+  const fetchStudentSubjects = useCallback(async (classIdentifier: string, streamIdentifier?: string) => {
+    const streamQuery = streamIdentifier ? `&stream_id=${streamIdentifier}` : '';
+    const response = await fetch(`/api/student-subjects?class_id=${classIdentifier}${streamQuery}`);
     const result = await response.json();
     if (response.ok) {
       setStudentSubjects(result.data || []);
@@ -140,16 +144,18 @@ export default function TeacherCombinationsPage() {
     });
 
     setDraftAssignments(draftMap);
+    // Snapshot initial drafts so we can detect changes and disable Save when unchanged
+    setInitialDrafts(JSON.parse(JSON.stringify(draftMap)));
   }, []);
 
-  const loadPageData = useCallback(async (classIdentifier: string) => {
+  const loadPageData = useCallback(async (classIdentifier: string, streamIdentifier?: string) => {
     setErrorMessage(null);
     try {
       const [studentsData, combinationsData, subjectsData, studentSubjectsData] = await Promise.all([
-        fetchStudents(classIdentifier),
+        fetchStudents(classIdentifier, streamIdentifier),
         fetchCombinations(),
         fetchSubjects(classIdentifier),
-        fetchStudentSubjects(classIdentifier)
+        fetchStudentSubjects(classIdentifier, streamIdentifier)
       ]);
 
       buildDraftAssignments(studentsData, studentSubjectsData);
@@ -176,12 +182,13 @@ export default function TeacherCombinationsPage() {
       const { data } = await teacherResponse.json();
       setTeacher(data);
       const teacherClassId = data?.class_teacher_class_id?.toString().toLowerCase().trim() || '';
+      const teacherStreamId = data?.class_teacher_stream_id?.toString().toLowerCase().trim() || '';
       if (!data?.is_class_teacher || !A_LEVEL_CLASSES.includes(teacherClassId)) {
         setErrorMessage('This page is only available for S5-S6 class teachers.');
         setLoading(false);
         return;
       }
-      await loadPageData(teacherClassId);
+      await loadPageData(teacherClassId, teacherStreamId);
     } catch (error: any) {
       console.error(error);
       setErrorMessage(error.message || 'Failed to load combination manager.');
@@ -230,7 +237,10 @@ export default function TeacherCombinationsPage() {
       if (!response.ok) {
         throw new Error(result.error || 'Failed to save subject assignments.');
       }
-      await loadPageData(normalizedClassId);
+      const teacherStream = teacher?.class_teacher_stream_id?.toString().toLowerCase().trim() || undefined;
+      await loadPageData(normalizedClassId, teacherStream);
+      // Update the snapshot so Save is disabled until further edits
+      setInitialDrafts(prev => ({ ...prev, [studentId]: JSON.parse(JSON.stringify(assignment)) }));
       alert('Subject assignments saved successfully.');
     } catch (error: any) {
       console.error(error);
@@ -290,6 +300,11 @@ export default function TeacherCombinationsPage() {
               </div>
 
               <div className="bg-white shadow-md rounded-lg overflow-hidden">
+                <datalist id="combos-list">
+                  {combinations.map((combo) => (
+                    <option key={combo.id} value={combo.code}>{combo.code} - {combo.name}</option>
+                  ))}
+                </datalist>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
@@ -317,6 +332,14 @@ export default function TeacherCombinationsPage() {
                             principal3: '',
                             subsidiary: ''
                           };
+                          const initial = initialDrafts[student.id] || {
+                            combination_code: student.subject_combination || '',
+                            principal1: '',
+                            principal2: '',
+                            principal3: '',
+                            subsidiary: ''
+                          };
+                          const hasChanges = JSON.stringify(draft) !== JSON.stringify(initial);
 
                           return (
                             <tr key={student.id}>
@@ -324,19 +347,16 @@ export default function TeacherCombinationsPage() {
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{student.streams?.name || student.stream_id || 'N/A'}</td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{student.subject_combination || <span className="text-gray-400">Not set</span>}</td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                <select
+                                <input
+                                  list="combos-list"
                                   value={draft.combination_code}
                                   onChange={(e) => setDraftAssignments(prev => ({
                                     ...prev,
                                     [student.id]: { ...draft, combination_code: e.target.value }
                                   }))}
+                                  placeholder="e.g., PCM"
                                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900"
-                                >
-                                  <option value="">Leave unchanged</option>
-                                  {combinations.map((combo) => (
-                                    <option key={combo.id} value={combo.code}>{combo.code} — {combo.name}</option>
-                                  ))}
-                                </select>
+                                />
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm">
                                 <div className="grid gap-2">
@@ -400,8 +420,8 @@ export default function TeacherCombinationsPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleSaveAssignment(student.id)}
-                                  disabled={isSaving[student.id]}
-                                  className="inline-flex items-center px-3 py-2 bg-purple-600 text-white text-sm rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  disabled={isSaving[student.id] || !hasChanges}
+                                  className={`inline-flex items-center px-3 py-2 bg-purple-600 text-white text-sm rounded-md hover:bg-purple-700 ${(!hasChanges || isSaving[student.id]) ? 'opacity-50 blur-sm cursor-not-allowed' : ''}`}
                                 >
                                   {isSaving[student.id] ? 'Saving...' : 'Save'}
                                 </button>
