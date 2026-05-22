@@ -7,16 +7,25 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const studentId = searchParams.get('student_id');
+    const classId = searchParams.get('class_id');
 
     let query = supabaseAdmin
       .from('student_subjects')
       .select(`
-        *,
-        subjects(id, name, subject_type)
+        id,
+        student_id,
+        subject_id,
+        subject_type,
+        is_principal,
+        is_active,
+        subjects(id, name, subject_type),
+        students(id, full_name, class_id, stream_id, subject_combination)
       `);
 
     if (studentId) {
       query = query.eq('student_id', studentId);
+    } else if (classId) {
+      query = query.eq('students.class_id', classId);
     }
 
     const { data, error } = await query.order('created_at', { ascending: true });

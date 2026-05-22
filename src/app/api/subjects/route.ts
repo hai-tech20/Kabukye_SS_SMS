@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     // Build query with only necessary columns
     let query = supabaseAdmin
       .from('subjects')
-      .select('id, name, class_id, paper_count');
+      .select('id, name, class_id, paper_count, subject_type');
 
     if (class_id) {
       query = query.eq('class_id', class_id);
