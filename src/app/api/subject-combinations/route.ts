@@ -18,7 +18,17 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: data || [] });
   } catch (error) {
-    console.error('Error fetching subject combinations:', error);
-    return NextResponse.json({ error: 'Failed to fetch combinations' }, { status: 500 });
+    // Log full error details (including non-enumerable properties) for debugging
+    try {
+      console.error('Error fetching subject combinations:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    } catch (err) {
+      console.error('Error fetching subject combinations (stringify failed):', error);
+    }
+
+    const message = process.env.NODE_ENV === 'development'
+      ? String((error as any)?.message || error)
+      : 'Failed to fetch combinations';
+
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
