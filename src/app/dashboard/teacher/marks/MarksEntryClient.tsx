@@ -73,13 +73,15 @@ export default function MarksEntryClient({
   const [hasEdits, setHasEdits] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
   const [isPublished, setIsPublished] = useState(false);
+  const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments);
+  const [assignmentsLoaded, setAssignmentsLoaded] = useState(initialAssignments.length > 0);
   
   // Pre-filtered data based on teacher assignments
-  const [classes] = useState(() => {
+  const [classes, setClasses] = useState(() => {
     const assignedClassIds = [...new Set(initialAssignments.map((a: any) => a.class_id))];
     return initialClasses.filter((cls: any) => assignedClassIds.includes(cls.id));
   });
-  
+
   const [allStreams] = useState(initialStreams);
   const [allSubjects] = useState(() => {
     // Convert to Subject interface
@@ -129,11 +131,46 @@ export default function MarksEntryClient({
   }, [students, searchTerm]);
 
   // Initial load - no need to fetch classes as they're pre-loaded
+  // If initial server props had no assignments, try fetching them client-side
   useEffect(() => {
-    if (initialAssignments.length === 0) {
+    if (assignmentsLoaded) return;
+
+    const fetchAssignments = async () => {
+      try {
+        const res = await fetch('/api/teacher/subjects');
+        if (!res.ok) {
+          setAssignments([]);
+          setAssignmentsLoaded(true);
+          return;
+        }
+        const json = await res.json();
+        const data = json?.data || json?.assignments || json || [];
+        setAssignments(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Failed to fetch teacher assignments client-side', err);
+        setAssignments([]);
+      } finally {
+        setAssignmentsLoaded(true);
+      }
+    };
+
+    fetchAssignments();
+  }, [assignmentsLoaded]);
+
+  // Update error state when assignments are known
+  useEffect(() => {
+    if (assignmentsLoaded && (!assignments || assignments.length === 0)) {
       setError('No subjects assigned to you. Please contact the administrator.');
+    } else {
+      setError(null);
     }
-  }, [initialAssignments]);
+  }, [assignments, assignmentsLoaded]);
+
+  // Recompute classes when assignments change
+  useEffect(() => {
+    const assignedClassIds = [...new Set(assignments.map((a: any) => a.class_id))];
+    setClasses(initialClasses.filter((cls: any) => assignedClassIds.includes(cls.id)));
+  }, [assignments, initialClasses]);
 
   useEffect(() => {
     const fetchPublishedStatus = async () => {
@@ -175,7 +212,7 @@ export default function MarksEntryClient({
     }
 
     // Filter streams and subjects based on assignments for selected class
-    const relevantAssignments = initialAssignments.filter(a => a.class_id === selectedClass);
+    const relevantAssignments = assignments.filter(a => a.class_id === selectedClass);
     
     const relevantStreamIds = [...new Set(relevantAssignments.map(a => a.stream_id))];
     const relevantSubjectIds = [...new Set(relevantAssignments.map(a => a.subject_id))];
@@ -186,7 +223,7 @@ export default function MarksEntryClient({
     setStreams(filteredStreams);
     setSubjects(filteredSubjects);
     setSelectedSubject('');
-  }, [selectedClass, initialAssignments, allStreams, allSubjects]);
+  }, [selectedClass, assignments, allStreams, allSubjects]);
 
   // Fetch students and grades with deduplication
   useEffect(() => {
