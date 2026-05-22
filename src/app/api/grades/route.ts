@@ -164,21 +164,27 @@ export async function POST(request: NextRequest) {
     }
 
     // Get report settings for weights
+    // Try to fetch report settings; use maybeSingle to avoid exceptions when no row
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from('report_settings')
       .select('mot_weight, eot_weight, assessment_count, is_published')
       .eq('academic_year', academicYear)
       .eq('term', term)
-      .single();
+      .maybeSingle();
 
-    console.log('Grades API - Settings:', settings, 'Error:', settingsError);
+    console.log('Grades API - Settings fetch result:', settings, 'Error:', settingsError);
 
-    if (settings?.is_published) {
+    if (settings && settings.is_published) {
       return NextResponse.json(
         { error: 'Cannot edit marks because this term has been published.' },
         { status: 403 }
       );
     }
+
+    // If settings are not configured, fall back to sensible defaults so teachers
+    // can still save marks. This avoids blocking teachers when admin hasn't
+    // created report settings for the term.
+    const effectiveSettings = settings || { mot_weight: 40, eot_weight: 60, assessment_count: 2, is_published: false };
 
     const { data: gradingScales, error: scalesError } = await supabaseAdmin
       .from('grading_scales')
@@ -187,7 +193,7 @@ export async function POST(request: NextRequest) {
 
     console.log('Grades API - Grading scales count:', gradingScales?.length, 'Error:', scalesError);
 
-    if (!settings || !gradingScales) {
+    if (!gradingScales || gradingScales.length === 0) {
       return NextResponse.json({ error: 'Report settings not configured' }, { status: 400 });
     }
 
@@ -215,8 +221,8 @@ export async function POST(request: NextRequest) {
       
       if (motScore !== undefined && motScore !== null && eotScore !== undefined && eotScore !== null) {
         finalScore = Math.round(
-          (motScore * settings.mot_weight / 100) +
-          (eotScore * settings.eot_weight / 100)
+          (motScore * effectiveSettings.mot_weight / 100) +
+          (eotScore * effectiveSettings.eot_weight / 100)
         );
         
         // Find grade from grading scale
@@ -262,7 +268,7 @@ export async function POST(request: NextRequest) {
         stream_id: grade.stream_id,
         term: grade.term,
         academic_year: grade.academic_year,
-        assessment_count: settings.assessment_count
+        assessment_count: effectiveSettings.assessment_count
       };
       
       // Only include scores if they exist
