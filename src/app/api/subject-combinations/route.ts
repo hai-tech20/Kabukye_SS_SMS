@@ -3,14 +3,11 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   try {
+    // Return flat combination records. The DB does not declare FK relationships
+    // for subject1_id/subject2_id/subject3_id, so PostgREST expansion fails.
     const { data, error } = await supabaseAdmin
       .from('subject_combinations')
-      .select(`
-        *,
-        subject1:subject1_id(id, name),
-        subject2:subject2_id(id, name),
-        subject3:subject3_id(id, name)
-      `)
+      .select('id, code, name, category, requires_sub_math, requires_sub_ict')
       .order('category', { ascending: true })
       .order('code', { ascending: true });
 
