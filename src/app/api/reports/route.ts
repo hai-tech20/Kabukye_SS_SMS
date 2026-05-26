@@ -3,6 +3,9 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { requireAdminSession } from '@/lib/auth-session';
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAdminSession();
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const { searchParams } = new URL(request.url);
     const term = searchParams.get('term');
@@ -134,6 +137,22 @@ export async function POST(request: NextRequest) {
         term,
         is_published: true
       }, { onConflict: 'academic_year,term' });
+
+    // Calculate UACE grades for S5/S6 students (if applicable)
+    const { data: uaceResult, error: uaceError } = await supabaseAdmin.rpc(
+      'calculate_s5_s6_uace_grades',
+      {
+        p_academic_year: Number(academic_year),
+        p_term: Number(term)
+      }
+    );
+    
+    if (uaceError) {
+      console.warn('UACE grade calculation warning:', uaceError);
+      // Don't throw — UACE calculation should not block report publishing
+    } else {
+      console.log('UACE grades calculated successfully for year', academic_year, 'term', term);
+    }
 
     // Mark the academic term as completed
     const { data: yearData, error: yearError } = await supabaseAdmin

@@ -36,8 +36,8 @@ export default function AdminSidebar({ sidebarOpen: externalSidebarOpen, setSide
   };
 
   const handleBackToWebsite = () => {
-    // Log out first to ensure session is cleared
-    window.location.href = '/api/auth/logout?redirect=http://localhost:3000';
+    // Log out first so the next person on this device must sign in again
+    window.location.href = '/api/auth/logout?redirect=website';
   };
 
   const isActive = (href: string) => {

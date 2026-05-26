@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAdminSession } from '@/lib/auth-session';
 
 export async function POST(request: NextRequest) {
   try {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
+    }
+    const auth = await requireAdminSession();
+    if (auth instanceof NextResponse) return auth;
     // Insert classes
     const classes = [
       { name: 'S1', academic_year: '2025', term: 'Term 1' },

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireStaff } from '@/lib/auth-session';
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireStaff();
+    if (auth instanceof NextResponse) return auth;
     const { searchParams } = new URL(request.url);
     const class_id = searchParams.get('class_id');
     

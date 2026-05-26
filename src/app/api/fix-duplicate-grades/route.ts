@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireAdminSession } from '@/lib/auth-session';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,6 +15,9 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdminSession();
+    if (auth instanceof NextResponse) return auth;
+
     console.log('Checking for duplicate grades...');
     
     // Find all duplicate grades (same student/subject/class/stream/term/year)

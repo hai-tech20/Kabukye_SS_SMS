@@ -75,10 +75,25 @@ export default function ClassResultsPage() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [classInfo, setClassInfo] = useState<{ name: string; stream_name: string } | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
+  const [selectedYear, setSelectedYear] = useState('2026');
+  const [selectedTerm, setSelectedTerm] = useState('1');
+  const [selectedSet, setSelectedSet] = useState<'MOT' | 'EOT'>('MOT');
 
   useEffect(() => {
     fetchTeacherData();
   }, []);
+
+  useEffect(() => {
+    if (teacher?.is_class_teacher && teacher.class_teacher_class_id) {
+      fetchGrades(
+        teacher.class_teacher_class_id,
+        teacher.class_teacher_stream_id,
+        selectedYear,
+        selectedTerm,
+        selectedSet
+      );
+    }
+  }, [teacher, selectedYear, selectedTerm, selectedSet]);
 
   const fetchTeacherData = async () => {
     try {
@@ -95,10 +110,12 @@ export default function ClassResultsPage() {
         const { data } = await teacherResponse.json();
         setTeacher(data);
         
-        // If class teacher, fetch class data
+        // If class teacher, fetch class info and student list
         if (data?.is_class_teacher && data?.class_teacher_class_id) {
           fetchClassData(data.class_teacher_class_id, data.class_teacher_stream_id);
         }
+      } else {
+        console.error('Failed to fetch teacher info:', teacherResponse.status);
       }
     } catch (error) {
       console.error('Error fetching teacher data:', error);
@@ -132,93 +149,89 @@ export default function ClassResultsPage() {
         setStudents(studentsData.data || []);
       }
       
-      // Fetch grades for all subjects FIRST (so we know which subjects have grades)
-      const gradesRes = await fetch(`/api/grades?class_id=${classId}${streamId ? `&stream_id=${streamId}` : ''}&year=2026&term=1`);
-      console.log('Class Results - Grades fetch status:', gradesRes.status);
-      let transformedGrades: any[] = [];
-      let gradeSubjectIds: string[] = [];
-      if (gradesRes.ok) {
-        const gradesData = await gradesRes.json();
-        console.log('Class Results - Grades data:', gradesData);
-        console.log('Class Results - Grades count:', gradesData.data?.length || 0);
-        // Transform grades to include paper scores from grade_papers
-        transformedGrades = (gradesData.data || []).map((grade: any) => {
-          const papers = grade.grade_papers || [];
-          console.log('Class Results - Grade for student:', grade.student_id, 'subject:', grade.subject_id, 'papers:', papers);
-          return {
-            ...grade,
-            p1_score: papers.find((p: any) => p.paper_number === 1)?.score,
-            p2_score: papers.find((p: any) => p.paper_number === 2)?.score,
-            p3_score: papers.find((p: any) => p.paper_number === 3)?.score,
-          };
-        });
-        console.log('Class Results - Transformed grades:', transformedGrades);
-        setGrades(transformedGrades);
-        // Extract unique subject IDs from grades
-        gradeSubjectIds = [...new Set(transformedGrades.map(g => g.subject_id))];
-        console.log('Class Results - Subject IDs from grades:', gradeSubjectIds);
-      }
-      
       // Fetch subjects for this class
       const subjectsRes = await fetch(`/api/subjects?class_id=${classId}`);
       let allSubjects: any[] = [];
       if (subjectsRes.ok) {
         const subjectsData = await subjectsRes.json();
-        console.log('Class Results - Fetched subjects for class:', subjectsData);
-        // API returns array directly, not wrapped in data property
         const subjectsArray = Array.isArray(subjectsData) ? subjectsData : (subjectsData.data || []);
         allSubjects = [...subjectsArray];
       }
       
-      // Also fetch subjects that have grades (in case they have different IDs like a-phys-s6 vs a-phys-s5)
-      for (const subjectId of gradeSubjectIds) {
-        const subjectRes = await fetch(`/api/subjects`);
-        if (subjectRes.ok) {
-          const allSubjectsData = await subjectRes.json();
-          const subjectsArray = Array.isArray(allSubjectsData) ? allSubjectsData : (allSubjectsData.data || []);
-          const matchingSubject = subjectsArray.find((s: any) => s.id === subjectId);
-          if (matchingSubject && !allSubjects.find((s: any) => s.id === subjectId)) {
-            allSubjects.push(matchingSubject);
+      setSubjects([]);
+      if (allSubjects.length > 0) {
+        const mappedSubjects = allSubjects.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          paper_count: s.paper_count || 1,
+          abbreviated_name: subjectAbbreviations[s.name] || s.name.substring(0, 4)
+        }));
+        setSubjects(mappedSubjects);
+      }
+    } catch (error) {
+      console.error('Error fetching class data:', error);
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
+  const fetchGrades = async (classId: string, streamId: string | undefined, year: string, term: string, setType: 'MOT' | 'EOT') => {
+    try {
+      setDataLoading(true);
+      const gradesRes = await fetch(
+        `/api/grades?class_id=${classId}${streamId ? `&stream_id=${streamId}` : ''}&year=${encodeURIComponent(year)}&term=${encodeURIComponent(term)}&set=${encodeURIComponent(setType)}`
+      );
+      console.log('Class Results - Grades fetch status:', gradesRes.status, 'set:', setType);
+      if (!gradesRes.ok) {
+        console.error('Failed to fetch grades:', gradesRes.status);
+        setGrades([]);
+        return;
+      }
+
+      const gradesData = await gradesRes.json();
+      const transformedGrades = (gradesData.data || []).map((grade: any) => {
+        const papers = grade.grade_papers || [];
+        return {
+          ...grade,
+          p1_score: papers.find((p: any) => p.paper_number === 1)?.score,
+          p2_score: papers.find((p: any) => p.paper_number === 2)?.score,
+          p3_score: papers.find((p: any) => p.paper_number === 3)?.score,
+        };
+      });
+      setGrades(transformedGrades);
+
+      const gradeSubjectIds = [...new Set(transformedGrades.map((g: any) => g.subject_id))];
+      const existingSubjectIds = subjects.map(s => s.id);
+      const missingSubjectIds = gradeSubjectIds.filter(id => !existingSubjectIds.includes(id));
+
+      if (missingSubjectIds.length > 0) {
+        const allSubjectsRes = await fetch('/api/subjects');
+        if (allSubjectsRes.ok) {
+          const allSubjectsData = await allSubjectsRes.json();
+          const allSubjectsArray = Array.isArray(allSubjectsData) ? allSubjectsData : (allSubjectsData.data || []);
+          const missingSubjects = allSubjectsArray.filter((s: any) => missingSubjectIds.includes(s.id));
+
+          if (missingSubjects.length > 0) {
+            setSubjects(prevSubjects => {
+              const merged = [...prevSubjects];
+              for (const subject of missingSubjects) {
+                if (!merged.some(s => s.id === subject.id)) {
+                  merged.push({
+                    id: subject.id,
+                    name: subject.name,
+                    paper_count: subject.paper_count || 1,
+                    abbreviated_name: subjectAbbreviations[subject.name] || subject.name.substring(0, 4)
+                  });
+                }
+              }
+              return merged;
+            });
           }
         }
       }
-      
-      // Remove duplicates based on subject name (case-insensitive)
-      // PRIORITY: Keep subjects that have grades first, then add others
-      const seenNames = new Set<string>();
-      const uniqueSubjects: any[] = [];
-      
-      // First pass: Add subjects that have grades (these take priority)
-      for (const s of allSubjects) {
-        const normalizedName = (s.name || '').toLowerCase().trim();
-        if (gradeSubjectIds.includes(s.id) && !seenNames.has(normalizedName)) {
-          seenNames.add(normalizedName);
-          uniqueSubjects.push(s);
-        }
-      }
-      
-      // Second pass: Add remaining subjects that don't have grades yet
-      for (const s of allSubjects) {
-        const normalizedName = (s.name || '').toLowerCase().trim();
-        if (!seenNames.has(normalizedName)) {
-          seenNames.add(normalizedName);
-          uniqueSubjects.push(s);
-        }
-      }
-      
-      console.log('Class Results - Unique subjects (grades prioritized):', uniqueSubjects.map(s => ({id: s.id, name: s.name})));
-      
-      // Map subjects with abbreviations
-      const mappedSubjects = uniqueSubjects.map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        paper_count: s.paper_count || 1,
-        abbreviated_name: subjectAbbreviations[s.name] || s.name.substring(0, 4)
-      }));
-      console.log('Class Results - Mapped subjects:', mappedSubjects);
-      setSubjects(mappedSubjects);
     } catch (error) {
-      console.error('Error fetching class data:', error);
+      console.error('Error fetching grades:', error);
+      setGrades([]);
     } finally {
       setDataLoading(false);
     }
@@ -230,10 +243,24 @@ export default function ClassResultsPage() {
 
   const getGradeDisplay = (grade: Grade | undefined, paperNum: number) => {
     if (!grade) return '-';
-    if (paperNum === 1 && grade.p1_score !== undefined) return grade.p1_score;
-    if (paperNum === 2 && grade.p2_score !== undefined) return grade.p2_score;
-    if (paperNum === 3 && grade.p3_score !== undefined) return grade.p3_score;
-    if (paperNum === 1 && grade.final_score !== undefined) return grade.final_score;
+    if (paperNum === 1) {
+      if (selectedSet === 'MOT' && grade.mot_score !== undefined && grade.mot_score !== null) {
+        return grade.mot_score;
+      }
+      if (selectedSet === 'EOT' && grade.eot_score !== undefined && grade.eot_score !== null) {
+        return grade.eot_score;
+      }
+      if (grade.p1_score !== undefined && grade.p1_score !== null) {
+        return grade.p1_score;
+      }
+      if (grade.final_score !== undefined && grade.final_score !== null) {
+        return grade.final_score;
+      }
+      return '-';
+    }
+
+    if (paperNum === 2 && grade.p2_score !== undefined && grade.p2_score !== null) return grade.p2_score;
+    if (paperNum === 3 && grade.p3_score !== undefined && grade.p3_score !== null) return grade.p3_score;
     return '-';
   };
 
@@ -242,6 +269,17 @@ export default function ClassResultsPage() {
       window.location.href = '/api/auth/logout';
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-blue-900"></div>
+          <p className="mt-4 text-gray-600">Loading class results...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!teacher?.is_class_teacher) {
     return (
@@ -278,7 +316,7 @@ export default function ClassResultsPage() {
             </div>
           ) : (
           <>
-          <div className="mb-8 flex justify-between items-center flex-wrap gap-4">
+          <div className="mb-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div>
               <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Class Results</h1>
               <p className="text-gray-600 mt-2">
@@ -293,6 +331,48 @@ export default function ClassResultsPage() {
               >
                 Logout
               </button>
+            </div>
+          </div>
+
+          <div className="mb-6 grid gap-3 sm:grid-cols-3 xl:grid-cols-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Academic Year</label>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              >
+                <option value="2024">2024</option>
+                <option value="2025">2025</option>
+                <option value="2026">2026</option>
+                <option value="2027">2027</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Term</label>
+              <select
+                value={selectedTerm}
+                onChange={(e) => setSelectedTerm(e.target.value)}
+                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              >
+                <option value="1">Term 1</option>
+                <option value="2">Term 2</option>
+                <option value="3">Term 3</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Set</label>
+              <select
+                value={selectedSet}
+                onChange={(e) => setSelectedSet(e.target.value as 'MOT' | 'EOT')}
+                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              >
+                <option value="MOT">MOT</option>
+                <option value="EOT">EOT</option>
+              </select>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-blue-50 p-4 text-sm text-blue-900">
+              Viewing {selectedSet} results for term {selectedTerm}, {selectedYear}
             </div>
           </div>
 

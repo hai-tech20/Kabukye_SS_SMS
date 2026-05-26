@@ -2,9 +2,18 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin, withRetry } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
+import { SESSION_MAX_AGE_SEC } from '@/lib/auth-session';
 
 const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
 const STUDENT_DEFAULT_PASSWORD = 'student@kss';
+
+const cookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  path: '/',
+  maxAge: SESSION_MAX_AGE_SEC,
+};
 
 export async function POST(request: Request) {
   try {
@@ -16,12 +25,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Password is required' }, { status: 400 });
     }
 
-    let user: any = null;
+    let user: { id: string; full_name?: string; password_hash?: string; role?: string } | null = null;
     let role = '';
 
-    // No more mock data. Always use Supabase with retry logic.
     if (loginType === 'admin') {
-      const { data, error } = await withRetry(() =>
+      const { data } = await withRetry(() =>
         supabaseAdmin
           .from('teachers')
           .select('*')
@@ -31,10 +39,9 @@ export async function POST(request: Request) {
           .single()
       );
       user = data;
-      role = data?.role;
-
+      role = data?.role || 'admin';
     } else if (loginType === 'teacher') {
-      const { data, error } = await withRetry(() =>
+      const { data } = await withRetry(() =>
         supabaseAdmin
           .from('teachers')
           .select('*')
@@ -45,9 +52,8 @@ export async function POST(request: Request) {
       );
       user = data;
       role = 'teacher';
-
     } else if (loginType === 'student') {
-      const { data, error } = await withRetry(() =>
+      const { data } = await withRetry(() =>
         supabaseAdmin
           .from('students')
           .select('*')
@@ -57,28 +63,35 @@ export async function POST(request: Request) {
       );
       user = data;
       role = 'student';
+    } else {
+      return NextResponse.json({ error: 'Invalid login type' }, { status: 400 });
     }
 
     if (!user) {
-      return NextResponse.json({ error: 'Invalid credentials. Please check and try again.' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Invalid credentials. Please check and try again.' },
+        { status: 401 }
+      );
     }
 
     let passwordMatch = false;
 
-    // Students use a shared portal password and schoolpay code as their ID.
     if (loginType === 'student') {
       passwordMatch = password === STUDENT_DEFAULT_PASSWORD;
     } else {
-      passwordMatch = await bcrypt.compare(password, user.password_hash);
+      passwordMatch = await bcrypt.compare(password, user.password_hash || '');
     }
 
     if (!passwordMatch) {
-      return NextResponse.json({ error: 'Invalid credentials. Please check and try again.' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Invalid credentials. Please check and try again.' },
+        { status: 401 }
+      );
     }
 
     const token = await new SignJWT({
       id: user.id,
-      role: role,
+      role,
       full_name: user.full_name,
     })
       .setProtectedHeader({ alg: 'HS256' })
@@ -87,22 +100,16 @@ export async function POST(request: Request) {
 
     const response = NextResponse.json({
       success: true,
-      role: role,
+      role,
       full_name: user.full_name,
     });
 
-    // Use session cookie (no maxAge) so it expires when browser/tab is closed
-    response.cookies.set('sms_session', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/',
-    });
+    response.cookies.set('sms_session', token, cookieOptions);
+    response.cookies.set('sms_entry', 'sms', cookieOptions);
 
     return response;
-
   } catch (error) {
-    console.error('=== LOGIN API CRASHED ===', error);
+    console.error('Login API error:', error);
     return NextResponse.json({ error: 'Server error. Please try again.' }, { status: 500 });
   }
 }

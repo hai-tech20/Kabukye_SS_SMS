@@ -1,17 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, withRetry } from '@/lib/supabase';
-import { getSession } from '@/lib/auth-session';
+import { requireSession, requireTeacherOrAdmin, validateScore } from '@/lib/auth-session';
 import crypto from 'crypto';
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireSession();
+    if (auth instanceof NextResponse) return auth;
+    const session = auth;
+
     const { searchParams } = new URL(request.url);
     const classId = searchParams.get('class_id');
     const streamId = searchParams.get('stream_id');
     const term = searchParams.get('term');
     const year = searchParams.get('year');
     const subjectId = searchParams.get('subject_id');
-    const studentId = searchParams.get('student_id');
+    let studentId = searchParams.get('student_id');
+
+    if (session.role === 'student') {
+      if (studentId && studentId !== session.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      studentId = session.id;
+    }
 
     // Determine if this is A-Level (S5/S6)
     const isALevel = classId?.includes('s5') || classId?.includes('s6');
@@ -23,7 +34,7 @@ export async function GET(request: NextRequest) {
         students(full_name, schoolpay_code, class_id, stream_id),
         subjects(name, paper_count),
         teachers(full_name),
-        grade_papers(paper_number, score)
+        grade_papers(paper_number, assessment_type, score)
       `)
       .eq('academic_year', year || '2026')
       .eq('term', term || '1');
@@ -95,18 +106,24 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Map paper scores
+      // Map paper scores by MOT/EOT
       const papers = grade.grade_papers || [];
-      const p1 = papers.find((p: any) => p.paper_number === 1)?.score;
-      const p2 = papers.find((p: any) => p.paper_number === 2)?.score;
-      const p3 = papers.find((p: any) => p.paper_number === 3)?.score;
+      const p1Mot = papers.find((p: any) => p.paper_number === 1 && p.assessment_type === 'MOT')?.score;
+      const p2Mot = papers.find((p: any) => p.paper_number === 2 && p.assessment_type === 'MOT')?.score;
+      const p3Mot = papers.find((p: any) => p.paper_number === 3 && p.assessment_type === 'MOT')?.score;
+      const p1Eot = papers.find((p: any) => p.paper_number === 1 && p.assessment_type === 'EOT')?.score;
+      const p2Eot = papers.find((p: any) => p.paper_number === 2 && p.assessment_type === 'EOT')?.score;
+      const p3Eot = papers.find((p: any) => p.paper_number === 3 && p.assessment_type === 'EOT')?.score;
 
       return {
         ...grade,
         points,
-        p1_score: p1,
-        p2_score: p2,
-        p3_score: p3
+        p1_score: p1Mot,
+        p2_score: p2Mot,
+        p3_score: p3Mot,
+        p1_eot_score: p1Eot,
+        p2_eot_score: p2Eot,
+        p3_eot_score: p3Eot
       };
     });
 
@@ -119,16 +136,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireTeacherOrAdmin();
+    if (auth instanceof NextResponse) return auth;
+    const session = auth;
+
     const gradesData = await request.json();
     console.log('Grades API - Received data:', gradesData);
-    
-    // Get teacher ID from session
-    const session = await getSession();
-    console.log('Grades API - Session:', session);
-    
-    if (!session || (session.role !== 'teacher' && session.role !== 'admin')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
     const teacherId = session.id;
     console.log('Grades API - Teacher ID:', teacherId);
 
@@ -198,20 +211,63 @@ export async function POST(request: NextRequest) {
     }
 
     for (const grade of gradesData) {
+      if (session.role === 'teacher') {
+        const { data: assignment } = await supabaseAdmin
+          .from('teacher_subjects')
+          .select('id')
+          .eq('teacher_id', session.id)
+          .eq('class_id', grade.class_id)
+          .eq('stream_id', grade.stream_id)
+          .eq('subject_id', grade.subject_id)
+          .limit(1);
+        if (!assignment?.length) {
+          return NextResponse.json(
+            { error: 'You are not assigned to this class, stream, and subject.' },
+            { status: 403 }
+          );
+        }
+      }
+
+      const scoreFields = [
+        grade.mot_score,
+        grade.eot_score,
+        grade.mot_p1,
+        grade.eot_p1,
+        grade.mot_p2,
+        grade.eot_p2,
+        grade.mot_p3,
+        grade.eot_p3,
+      ];
+      for (const s of scoreFields) {
+        if (s !== undefined && s !== null && s !== '') {
+          const err = validateScore(s);
+          if (err) return NextResponse.json({ error: err }, { status: 400 });
+        }
+      }
+
       // Use provided mot_score and eot_score directly (already calculated by frontend)
       const motScore = grade.mot_score;
       const eotScore = grade.eot_score;
       
-      // Collect paper scores for storage
+      // Collect individual paper scores for MOT and EOT storage.
       const paperScores = [];
-      if (grade.p1_score !== undefined && grade.p1_score !== null) {
-        paperScores.push({ number: 1, score: grade.p1_score });
+      if (grade.mot_p1 !== undefined && grade.mot_p1 !== null) {
+        paperScores.push({ number: 1, assessment_type: 'MOT', score: grade.mot_p1 });
       }
-      if (grade.p2_score !== undefined && grade.p2_score !== null) {
-        paperScores.push({ number: 2, score: grade.p2_score });
+      if (grade.eot_p1 !== undefined && grade.eot_p1 !== null) {
+        paperScores.push({ number: 1, assessment_type: 'EOT', score: grade.eot_p1 });
       }
-      if (grade.p3_score !== undefined && grade.p3_score !== null) {
-        paperScores.push({ number: 3, score: grade.p3_score });
+      if (grade.mot_p2 !== undefined && grade.mot_p2 !== null) {
+        paperScores.push({ number: 2, assessment_type: 'MOT', score: grade.mot_p2 });
+      }
+      if (grade.eot_p2 !== undefined && grade.eot_p2 !== null) {
+        paperScores.push({ number: 2, assessment_type: 'EOT', score: grade.eot_p2 });
+      }
+      if (grade.mot_p3 !== undefined && grade.mot_p3 !== null) {
+        paperScores.push({ number: 3, assessment_type: 'MOT', score: grade.mot_p3 });
+      }
+      if (grade.eot_p3 !== undefined && grade.eot_p3 !== null) {
+        paperScores.push({ number: 3, assessment_type: 'EOT', score: grade.eot_p3 });
       }
 
       // Calculate final score if both MOT and EOT exist
@@ -274,6 +330,12 @@ export async function POST(request: NextRequest) {
       // Only include scores if they exist
       if (motScore !== undefined && motScore !== null) upsertData.mot_score = motScore;
       if (eotScore !== undefined && eotScore !== null) upsertData.eot_score = eotScore;
+      if (grade.mot_p1 !== undefined && grade.mot_p1 !== null) upsertData.p1_score = grade.mot_p1;
+      if (grade.eot_p1 !== undefined && grade.eot_p1 !== null) upsertData.p1_eot_score = grade.eot_p1;
+      if (grade.mot_p2 !== undefined && grade.mot_p2 !== null) upsertData.p2_score = grade.mot_p2;
+      if (grade.eot_p2 !== undefined && grade.eot_p2 !== null) upsertData.p2_eot_score = grade.eot_p2;
+      if (grade.mot_p3 !== undefined && grade.mot_p3 !== null) upsertData.p3_score = grade.mot_p3;
+      if (grade.eot_p3 !== undefined && grade.eot_p3 !== null) upsertData.p3_eot_score = grade.eot_p3;
       if (finalScore !== null) upsertData.final_score = finalScore;
       if (gradeLabel !== null) {
         upsertData.grade = gradeLabel;
@@ -282,7 +344,7 @@ export async function POST(request: NextRequest) {
 
       console.log(`Grades API: ${existingGrade ? 'Updating' : 'Creating'} grade for student ${grade.student_id} with ID ${gradeId}`);
 
-      const { data: upsertedGrade, error: gradeError } = await withRetry(async () =>
+          const { data: upsertedGrade, error: gradeError } = await withRetry(async () =>
         await supabaseAdmin
           .from('grades')
           .upsert(upsertData, { onConflict: 'id' })
@@ -290,42 +352,43 @@ export async function POST(request: NextRequest) {
           .single()
       );
 
-  if (gradeError) {
-    console.error('Grade upsert error:', gradeError);
-    throw gradeError;
-  }
-
-  // 2. Delete old paper scores for this grade to ensure clean update
-  if (upsertedGrade?.id) {
-    const { error: deleteError } = await withRetry(async () =>
-      await supabaseAdmin
-        .from('grade_papers')
-        .delete()
-        .eq('grade_id', upsertedGrade.id)
-    );
-    
-    if (deleteError) {
-      console.error('Error deleting old paper scores:', deleteError);
-    }
-  }
-  
-  // 3. Save new individual paper scores if they exist
-  if (paperScores.length > 0 && upsertedGrade?.id) {
-    for (const ps of paperScores) {
-      const { error: paperError } = await withRetry(async () =>
-        await supabaseAdmin
-          .from('grade_papers')
-          .upsert({
-            grade_id: upsertedGrade.id,
-            paper_number: ps.number,
-            score: ps.score
-          })
-      );
-      if (paperError) {
-        console.error('Paper score upsert error:', paperError);
+      if (gradeError) {
+        console.error('Grade upsert error:', gradeError);
+        throw gradeError;
       }
-    }
-  }
+
+      // 2. Delete old paper scores for this grade to ensure clean update
+      if (upsertedGrade?.id) {
+        const { error: deleteError } = await withRetry(async () =>
+          await supabaseAdmin
+            .from('grade_papers')
+            .delete()
+            .eq('grade_id', upsertedGrade.id)
+        );
+        
+        if (deleteError) {
+          console.error('Error deleting old paper scores:', deleteError);
+        }
+      }
+      
+      // 3. Save new individual paper scores if they exist
+      if (paperScores.length > 0 && upsertedGrade?.id) {
+        for (const ps of paperScores) {
+          const { error: paperError } = await withRetry(async () =>
+            await supabaseAdmin
+              .from('grade_papers')
+              .upsert({
+                grade_id: upsertedGrade.id,
+                paper_number: ps.number,
+                assessment_type: ps.assessment_type,
+                score: ps.score
+              }, { onConflict: 'grade_id,paper_number,assessment_type' })
+          );
+          if (paperError) {
+            console.error('Paper score upsert error:', paperError);
+          }
+        }
+      }
 }
 
     return NextResponse.json({ message: 'Grades saved successfully' });

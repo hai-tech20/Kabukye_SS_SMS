@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireSession } from '@/lib/auth-session';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requireSession();
+    if (auth instanceof NextResponse) return auth;
+
     const studentId = params.id;
     
     // Get the student's class and stream

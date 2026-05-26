@@ -10,7 +10,9 @@ export async function GET() {
     const token = cookieStore.get('sms_session')?.value;
     if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     const { payload } = await jwtVerify(token, secret);
-    return NextResponse.json(payload);
+    const response = NextResponse.json(payload);
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    return response;
   } catch {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
   }

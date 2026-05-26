@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getSession } from '@/lib/auth-session';
+import { getSession, requireSession, assertStudentSelf } from '@/lib/auth-session';
 
 // GET - Fetch student subjects
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireSession();
+    if (auth instanceof NextResponse) return auth;
+
     const { searchParams } = new URL(request.url);
     const studentId = searchParams.get('student_id');
+
+    if (studentId) {
+      const denied = assertStudentSelf(auth, studentId);
+      if (denied) return denied;
+    } else if (auth.role === 'student') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const classId = searchParams.get('class_id');
 
     let query = supabaseAdmin
@@ -20,7 +30,8 @@ export async function GET(request: NextRequest) {
         is_active,
         subjects(id, name, subject_type),
         students(id, full_name, class_id, stream_id, subject_combination)
-      `);
+      `)
+      .eq('is_active', true);
 
     if (studentId) {
       query = query.eq('student_id', studentId);

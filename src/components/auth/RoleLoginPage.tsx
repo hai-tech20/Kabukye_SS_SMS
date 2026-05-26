@@ -19,6 +19,24 @@ export default function RoleLoginPage({ role }: RoleLoginPageProps) {
 
   const handleSubmit = async () => {
     setError('');
+
+    if (!password.trim()) {
+      setError('Password is required.');
+      return;
+    }
+    if (role === 'admin' && !email.trim()) {
+      setError('Email is required.');
+      return;
+    }
+    if (role === 'teacher' && !teacherCode.trim()) {
+      setError('Teacher ID is required.');
+      return;
+    }
+    if (role === 'student' && !schoolpayCode.trim()) {
+      setError('Student ID is required.');
+      return;
+    }
+
     setLoading(true);
 
     try {

@@ -1,18 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, withRetry } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
-import { getSession } from '@/lib/auth-session';
+import {
+  getSession,
+  requireSession,
+  requireAdminSession,
+  validateImageFile,
+  sanitizeSearchInput,
+} from '@/lib/auth-session';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getSession();
+    const auth = await requireSession();
+    if (auth instanceof NextResponse) return auth;
+    const session = auth;
+
+    if (session.role === 'student') {
+      const { data: self, error: selfError } = await supabaseAdmin
+        .from('students')
+        .select(`*, classes!left(name), streams!left(name)`)
+        .eq('id', session.id)
+        .single();
+      if (selfError || !self) {
+        return NextResponse.json({ error: 'Student not found' }, { status: 404 });
+      }
+      return NextResponse.json({
+        data: [self],
+        pagination: { page: 1, limit: 1, total: 1, totalPages: 1 },
+      });
+    }
     const { searchParams } = new URL(request.url);
     const classId = searchParams.get('class_id');
     const streamId = searchParams.get('stream_id');
     const subjectId = searchParams.get('subject_id');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '1000');
-    const search = searchParams.get('search');
+    const search = sanitizeSearchInput(searchParams.get('search'));
 
     const normalizedClassId = classId?.toLowerCase().trim() || undefined;
     const normalizedStreamId = streamId?.toLowerCase().trim() || undefined;
@@ -278,15 +301,15 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Students API unexpected error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error', 
-      details: error 
-    }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdminSession();
+    if (auth instanceof NextResponse) return auth;
+
     const formData = await request.formData();
     
     // Extract data from FormData
@@ -326,6 +349,10 @@ export async function POST(request: NextRequest) {
     console.log('Checking for photo upload. Photo present:', !!studentData.photo, 'Size:', studentData.photo?.size);
     
     if (studentData.photo && studentData.photo.size > 0) {
+      const photoError = validateImageFile(studentData.photo);
+      if (photoError) {
+        return NextResponse.json({ error: photoError }, { status: 400 });
+      }
       try {
         const fileExt = studentData.photo.name.split('.').pop() || 'jpg';
         const fileName = `${studentId}.${fileExt}`;
@@ -392,9 +419,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Student creation unexpected error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error', 
-      details: error 
-    }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

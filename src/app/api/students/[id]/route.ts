@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
+import {
+  requireSession,
+  requireAdminSession,
+  assertStudentSelf,
+  validateImageFile,
+} from '@/lib/auth-session';
 
 // Helper function to validate student ID
 function validateStudentId(id: string): boolean {
@@ -23,7 +29,12 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requireSession();
+    if (auth instanceof NextResponse) return auth;
+
     const studentId = params.id;
+    const denied = assertStudentSelf(auth, studentId);
+    if (denied) return denied;
     
     // Validate student ID
     if (!validateStudentId(studentId)) {
@@ -59,6 +70,9 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requireAdminSession();
+    if (auth instanceof NextResponse) return auth;
+
     const id = params.id;
     
     // Validate student ID
@@ -173,6 +187,9 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requireAdminSession();
+    if (auth instanceof NextResponse) return auth;
+
     const studentId = params.id;
     
     // Validate student ID

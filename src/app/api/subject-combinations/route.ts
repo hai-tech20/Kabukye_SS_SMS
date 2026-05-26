@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireStaff } from '@/lib/auth-session';
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireStaff();
+    if (auth instanceof NextResponse) return auth;
     // Return flat combination records. The DB does not declare FK relationships
     // for subject1_id/subject2_id/subject3_id, so PostgREST expansion fails.
     const { data, error } = await supabaseAdmin

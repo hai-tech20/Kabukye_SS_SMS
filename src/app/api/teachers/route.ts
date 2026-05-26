@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
+import { requireAdminSession } from '@/lib/auth-session';
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdminSession();
+    if (auth instanceof NextResponse) return auth;
     const { data, error } = await supabaseAdmin
       .from('teachers')
       .select(`
@@ -37,6 +40,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdminSession();
+    if (auth instanceof NextResponse) return auth;
+
     const formData = await request.formData();
     
     const teacherData: any = {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import TeacherSidebar from '@/components/sidebar/TeacherSidebar';
@@ -247,21 +247,71 @@ function GradesViewPage() {
     }
   };
 
-  const calculateClassStatistics = () => {
-    const validGrades = editedGrades.filter(g => g.final_score > 0);
-    if (validGrades.length === 0) return { average: 0, highest: 0, lowest: 0 };
-    
-    const scores = validGrades.map(g => g.final_score);
-    const average = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  const currentGrades = editingMode ? editedGrades : grades;
+
+  const stats = useMemo(() => {
+    // Determine which numeric value to use per selectedSet
+    const extractScore = (g: any) => {
+      if (selectedSet === 'MOT') return g.mot_score ?? g.mot ?? null;
+      if (selectedSet === 'EOT') return g.eot_score ?? g.eot ?? null;
+      return g.final_score ?? null;
+    };
+
+    const scores = (currentGrades || [])
+      .map(extractScore)
+      .filter((s: any) => s !== null && s !== undefined && !isNaN(s))
+      .map((n: any) => Number(n));
+
+    const count = scores.length;
+    if (count === 0) return {
+      count: 0,
+      average: 0,
+      median: 0,
+      stddev: 0,
+      highest: 0,
+      lowest: 0,
+      passRate: 0,
+      distribution: {}
+    };
+
+    const sum = scores.reduce((a, b) => a + b, 0);
+    const average = +(sum / count).toFixed(1);
+
+    const sorted = [...scores].sort((a, b) => a - b);
+    const mid = Math.floor(count / 2);
+    const median = count % 2 === 0 ? +( (sorted[mid - 1] + sorted[mid]) / 2 ).toFixed(1) : +sorted[mid].toFixed(1);
+
+    const variance = scores.reduce((acc, val) => acc + Math.pow(val - average, 2), 0) / count;
+    const stddev = +Math.sqrt(variance).toFixed(1);
+
     const highest = Math.max(...scores);
     const lowest = Math.min(...scores);
-    
-    return { average, highest, lowest };
-  };
 
-  const stats = calculateClassStatistics();
+    // Simple pass threshold (>=50)
+    const passCount = scores.filter(s => s >= 50).length;
+    const passRate = +((passCount / count) * 100).toFixed(1);
 
-  const currentGrades = editingMode ? editedGrades : grades;
+    // Grade buckets A/B/C/D/F using simple boundaries
+    const getGradeLetter = (score: number) => {
+      if (score >= 90) return 'A';
+      if (score >= 80) return 'B';
+      if (score >= 70) return 'C';
+      if (score >= 60) return 'D';
+      return 'F';
+    };
+
+    const distribution: Record<string, { count: number; pct: number }> = {};
+    for (const s of scores) {
+      const g = getGradeLetter(s);
+      distribution[g] = distribution[g] || { count: 0, pct: 0 };
+      distribution[g].count++;
+    }
+    for (const k of Object.keys(distribution)) {
+      distribution[k].pct = +((distribution[k].count / count) * 100).toFixed(1);
+    }
+
+    return { count, average, median, stddev, highest, lowest, passRate, distribution };
+  }, [currentGrades, selectedSet, editingMode]);
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
 

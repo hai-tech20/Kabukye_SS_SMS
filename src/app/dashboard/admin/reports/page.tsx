@@ -14,6 +14,7 @@ interface Student {
   photo_url?: string;
   subject_combination?: string;
   schoolpay_code?: string;
+  total_uace_points?: number;
 }
 
 interface Grade {
@@ -26,6 +27,7 @@ interface Grade {
   descriptor: string;
   teacher?: string;
   points?: number;
+  uace_points?: number;
 }
 
 interface AcademicTerm {
@@ -51,9 +53,13 @@ interface ReportCardProps {
   headTeacherComment?: string;
 }
 
+const isSeniorSecondaryClass = (className: string) => /^(S5|S6)/i.test(className || '');
+const isJuniorSecondaryClass = (className: string) => /^(S1|S2)/i.test(className || '');
+const isLowerSecondaryClass = (className: string) => /^(S3|S4)/i.test(className || '');
+
 const getClassLevel = (className: string): 'S1-S2' | 'S3-S4' | 'S5-S6' => {
-  if (className === 'S1' || className === 'S2') return 'S1-S2';
-  if (className === 'S3' || className === 'S4') return 'S3-S4';
+  if (isJuniorSecondaryClass(className)) return 'S1-S2';
+  if (isLowerSecondaryClass(className)) return 'S3-S4';
   return 'S5-S6';
 };
 
@@ -86,7 +92,8 @@ const normalizeReportGrades = (grades: any[]): Grade[] => {
     grade: g.grade || getGradeFromScore(g.final_score ?? 0),
     descriptor: g.descriptor || getDescriptorFromGrade(g.grade || getGradeFromScore(g.final_score ?? 0)),
     teacher: g.teacher || g.teachers?.full_name || '' ,
-    points: g.points ?? 0
+    points: g.points ?? g.uace_points ?? 0,
+    uace_points: g.uace_points ?? g.points ?? 0
   }));
 };
 
@@ -98,425 +105,408 @@ const ordinal = (n: number | undefined) => {
   return n + (s[(v-20)%10] || s[v] || s[0]);
 };
 
-const ReportCardHeader: React.FC<{ student: Student; term: string; year: string }> = ({ student, term, year }) => (
-  <div className="mb-4 pb-2 border-b-2 border-blue-900">
-    {/* Top Header with Logo and School Name */}
-    <div className="flex items-start justify-between mb-4">
+/** Official Word-template header (black & white, centered) */
+const ReportCardOfficialHeader: React.FC = () => (
+  <div className="mb-3 font-serif text-black">
+    <div className="flex items-start gap-3">
       <div className="flex-shrink-0">
-        <Image src="/media/badge.png" alt="School Badge" width={80} height={80} className="object-contain" />
+        <Image src="/media/badge.png" alt="School Badge" width={72} height={72} className="object-contain" />
       </div>
-      <div className="text-center flex-1 px-2">
-        <h1 className="text-2xl font-black text-blue-900 mb-0 uppercase tracking-widest">KABUKYE SECONDARY SCHOOL</h1>
-        <p className="text-sm font-semibold text-gray-800 mb-1">P.O.Box 117, Kamuli District, Uganda</p>
-        <p className="text-xs font-medium text-gray-700 mb-1">Tel: +256 702 755 397 | +256 770 535 212</p>
-        <p className="text-xs font-medium text-gray-700 mb-1">Email: kabukyesecondaryschool@gmail.com</p>
-        <p className="text-sm font-bold text-gray-800 italic border-t pt-1">&quot;HOLISTIC EDUCATION, DISCIPLINE AND HARDWORK&quot;</p>
+      <div className="flex-1 text-center">
+        <h1 className="text-xl font-bold uppercase tracking-wide">Kabukye Secondary School</h1>
+        <p className="text-xs mt-0.5">P.O.Box 117, KAMULI. TEL: 0702755397 / 0770535212</p>
+        <p className="text-xs">Email: kabukyesecondaryschool@gmail.com</p>
+        <p className="text-xs font-semibold mt-1 uppercase">
+          Motto: &apos;Holistic Education, Discipline and Hardwork&apos;
+        </p>
+        <p className="text-sm font-bold mt-2 underline uppercase">End of Term Academic Report Card</p>
       </div>
-      <div className="w-16" />
+      <div className="w-[72px] flex-shrink-0" />
     </div>
-    
-    {/* Report Title */}
-    <div className="text-center bg-blue-900 text-white py-2 rounded mb-4">
-      <h2 className="text-xl font-bold uppercase tracking-wide">TERM {term} ACADEMIC REPORT CARD</h2>
-      <p className="text-xs mt-1">Academic Year {year}</p>
-    </div>
-    
-    {/* Student Information Section */}
-    <div className="grid grid-cols-4 gap-3 mb-3">
-      <div className="col-span-1">
-        {student.photo_url && student.photo_url.length > 0 ? (
-          <Image 
-            src={student.photo_url} 
-            alt={student.full_name} 
-            width={80}
-            height={110}
-            className="w-20 h-28 object-cover border-2 border-gray-400 rounded"
-          />
-        ) : (
-          <div className="w-20 h-28 bg-gray-200 border-2 border-gray-400 flex items-center justify-center rounded">
-            <svg className="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-            </svg>
-          </div>
-        )}
-      </div>
-      
-      <div className="col-span-4">
-        <div className="grid grid-cols-3 gap-2 text-sm">
-          <div className="col-span-3">
-            <div className="font-bold text-gray-700">STUDENT NAME:</div>
-            <div className="text-gray-900 font-semibold text-base uppercase">{student.full_name}</div>
-          </div>
-          <div>
-            <div className="font-bold text-xs text-gray-600">CLASS:</div>
-            <div className="text-gray-900 font-bold">{student.class}</div>
-          </div>
-          <div>
-            <div className="font-bold text-xs text-gray-600">STREAM:</div>
-            <div className="text-gray-900 font-bold">{student.stream}</div>
-          </div>
-          <div>
-            <div className="font-bold text-xs text-gray-600">GENDER:</div>
-            <div className="text-gray-900 font-bold">{student.gender}</div>
-          </div>
-          <div className="col-span-2">
-            <div className="font-bold text-xs text-gray-600">SCHOOL PAY CODE:</div>
-            <div className="text-gray-900 font-bold">{student.schoolpay_code || '-'}</div>
-          </div>
-          <div>
-            <div className="font-bold text-xs text-gray-600">TERM:</div>
-            <div className="text-gray-900 font-bold">{term}</div>
-          </div>
-          <div>
-            <div className="font-bold text-xs text-gray-600">YEAR:</div>
-            <div className="text-gray-900 font-bold">{year}</div>
-          </div>
-          {(student.class === 'S5' || student.class === 'S6') && student.subject_combination && (
-            <div className="col-span-3">
-              <div className="font-bold text-xs text-gray-600">SUBJECT COMBINATION:</div>
-              <div className="text-gray-900 font-bold">{student.subject_combination}</div>
-            </div>
-          )}
+  </div>
+);
+
+/** Student block matching the official template (photo + two columns) */
+const ReportCardTemplateStudentInfo: React.FC<{
+  student: Student;
+  term: string;
+  year: string;
+  showCombination?: boolean;
+}> = ({ student, term, year, showCombination }) => (
+  <div className="flex gap-3 mb-3 font-serif text-xs text-black">
+    <div className="flex-shrink-0">
+      {student.photo_url ? (
+        <Image
+          src={student.photo_url}
+          alt={student.full_name}
+          width={72}
+          height={96}
+          className="w-[72px] h-24 object-cover border border-gray-800"
+        />
+      ) : (
+        <div className="w-[72px] h-24 border border-gray-800 bg-gray-100 flex items-center justify-center">
+          <svg className="w-10 h-10 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+          </svg>
         </div>
+      )}
+    </div>
+    <div className="flex-1 grid grid-cols-2 gap-x-6 gap-y-1">
+      <div>
+        <span className="font-bold">NAME: </span>
+        <span className="uppercase">{student.full_name}</span>
       </div>
+      <div>
+        <span className="font-bold">STREAM: </span>
+        <span>{student.stream}</span>
+      </div>
+      <div>
+        <span className="font-bold">GENDER: </span>
+        <span>{student.gender}</span>
+      </div>
+      <div>
+        <span className="font-bold">TERM: </span>
+        <span>{term}</span>
+      </div>
+      <div>
+        <span className="font-bold">CLASS: </span>
+        <span>{student.class}</span>
+      </div>
+      <div>
+        <span className="font-bold">YEAR: </span>
+        <span>{year}</span>
+      </div>
+      <div>
+        <span className="font-bold">Student ID: </span>
+        <span>{student.schoolpay_code || '—'}</span>
+      </div>
+      {showCombination && (
+        <div>
+          <span className="font-bold">Combination (for s5 and s6): </span>
+          <span>{student.subject_combination || '—'}</span>
+        </div>
+      )}
     </div>
   </div>
 );
 
-const GradingScale: React.FC = () => (
-  <div className="mb-4 mt-4">
-    <div className="bg-blue-900 text-white font-bold py-2 px-3 rounded-t text-center text-sm">
-      GRADING SCHEME
-    </div>
-    <table className="w-full border-collapse border border-gray-800 text-xs">
+/** Footer block matching the official template */
+const ReportCardTemplateFooter: React.FC<{
+  classTeacher: string;
+  academicTerm?: AcademicTerm;
+  classTeacherComment?: string;
+  headTeacherComment?: string;
+}> = ({ classTeacher, academicTerm, classTeacherComment, headTeacherComment }) => (
+  <div className="mt-4 font-serif text-xs text-black">
+    <p className="font-bold mb-2">CLASS TEACHER: {classTeacher}</p>
+    <table className="w-full border-collapse border border-gray-800 mb-3">
       <tbody>
-        <tr className="bg-gray-100">
-          <td className="border border-gray-800 px-3 py-2 text-center font-bold text-blue-900">A</td>
-          <td className="border border-gray-800 px-3 py-2 text-center font-bold text-blue-900">B</td>
-          <td className="border border-gray-800 px-3 py-2 text-center font-bold text-blue-900">C</td>
-          <td className="border border-gray-800 px-3 py-2 text-center font-bold text-blue-900">D</td>
-          <td className="border border-gray-800 px-3 py-2 text-center font-bold text-blue-900">E</td>
+        <tr>
+          <td className="border border-gray-800 px-2 py-2 font-bold w-1/3 align-top">Class Teacher&apos;s comment</td>
+          <td className="border border-gray-800 px-2 py-2 min-h-[2.5rem]">{classTeacherComment || ''}</td>
         </tr>
         <tr>
-          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">Exceptional</td>
-          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">Outstanding</td>
-          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">Satisfactory</td>
-          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">Basic</td>
-          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">Elementary</td>
-        </tr>
-        <tr className="bg-blue-50">
-          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">80-100</td>
-          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">70-79</td>
-          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">50-69</td>
-          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">35-49</td>
-          <td className="border border-gray-800 px-3 py-2 text-center text-gray-900 font-semibold">00-34</td>
+          <td className="border border-gray-800 px-2 py-2 font-bold align-top">Headteacher&apos;s comment</td>
+          <td className="border border-gray-800 px-2 py-2 min-h-[2.5rem]">{headTeacherComment || ''}</td>
         </tr>
       </tbody>
     </table>
+    <div className="flex justify-between">
+      <span>
+        <span className="font-bold">Date of issue: </span>
+        {academicTerm?.end_date || '_______________'}
+      </span>
+      <span>
+        <span className="font-bold">Next Term Begins: </span>
+        {academicTerm?.next_term_start_date || '_______________'}
+      </span>
+    </div>
   </div>
 );
 
-const ReportCardSignatures: React.FC<{ classTeacher: string; headTeacher: string; academicTerm?: AcademicTerm; classTeacherComment?: string; headTeacherComment?: string }> = ({ classTeacher, headTeacher, academicTerm, classTeacherComment, headTeacherComment }) => (
-  <div className="mt-6">
-    <div className="mb-4">
-      <div className="font-bold text-gray-800 text-sm border-b-2 border-gray-400 pb-1">CLASS TEACHER: {classTeacher}</div>
-    </div>
-    
-    <table className="w-full border-collapse border-2 border-gray-800 mb-4 text-xs">
-      <tbody>
-        <tr>
-          <td className="border border-gray-800 px-3 py-3 text-left font-bold text-gray-800 bg-blue-50 w-1/2">Class Teacher&apos;s Comments</td>
-          <td className="border border-gray-800 px-3 py-6 text-left text-gray-900 w-1/2">{classTeacherComment || ''}</td>
-        </tr>
-        <tr>
-          <td className="border border-gray-800 px-3 py-3 text-left font-bold text-gray-800 bg-blue-50">Head Teacher&apos;s Comments</td>
-          <td className="border border-gray-800 px-3 py-6 text-left text-gray-900">{headTeacherComment || ''}</td>
-        </tr>
-      </tbody>
-    </table>
-    
-    <div className="grid grid-cols-2 gap-4 text-xs">
-      <div>
-        <p className="font-bold text-gray-800 mb-1">Date of Issue:</p>
-        <p className="text-gray-900">{academicTerm?.end_date || '_______________'}</p>
-      </div>
-      <div>
-        <p className="font-bold text-gray-800 mb-1">Next Term Begins:</p>
-        <p className="text-gray-900">{academicTerm?.next_term_start_date || '_______________'}</p>
-      </div>
-    </div>
-  </div>
+const O_LEVEL_FIXED_SUBJECTS = [
+  'Mathematics',
+  'History and Political Education',
+  'English',
+  'Geography',
+  'Physics',
+  'Biology',
+  'Chemistry',
+  'Physical education',
+  'Religious Education (CRE/IRE)',
+  'Entrepreneurship',
+  'Kiswahili',
+];
+
+const ReportCardOfficialGradingScale: React.FC = () => (
+  <table className="w-full border-collapse border border-gray-800 text-[10px] mb-2 font-serif">
+    <tbody>
+      <tr>
+        <td className="border border-gray-800 px-1 py-0.5 font-bold w-[22%]">GRADING SCHEME</td>
+        <td className="border border-gray-800 px-1 py-0.5 text-center font-bold">A</td>
+        <td className="border border-gray-800 px-1 py-0.5 text-center font-bold">B</td>
+        <td className="border border-gray-800 px-1 py-0.5 text-center font-bold">C</td>
+        <td className="border border-gray-800 px-1 py-0.5 text-center font-bold">D</td>
+        <td className="border border-gray-800 px-1 py-0.5 text-center font-bold">E</td>
+      </tr>
+      <tr>
+        <td className="border border-gray-800 px-1 py-0.5" />
+        <td className="border border-gray-800 px-1 py-0.5 text-center">Exceptional</td>
+        <td className="border border-gray-800 px-1 py-0.5 text-center">Outstanding</td>
+        <td className="border border-gray-800 px-1 py-0.5 text-center">Satisfactory</td>
+        <td className="border border-gray-800 px-1 py-0.5 text-center">Basic</td>
+        <td className="border border-gray-800 px-1 py-0.5 text-center">Elementary</td>
+      </tr>
+      <tr>
+        <td className="border border-gray-800 px-1 py-0.5" />
+        <td className="border border-gray-800 px-1 py-0.5 text-center">80-100</td>
+        <td className="border border-gray-800 px-1 py-0.5 text-center">70-79</td>
+        <td className="border border-gray-800 px-1 py-0.5 text-center">50-69</td>
+        <td className="border border-gray-800 px-1 py-0.5 text-center">35-49</td>
+        <td className="border border-gray-800 px-1 py-0.5 text-center">00-34</td>
+      </tr>
+    </tbody>
+  </table>
 );
+
+const getOLevelResult = (averageScore: number): string => {
+  if (averageScore >= 50) return 'Promoted';
+  if (averageScore >= 40) return 'Promoted on trial';
+  return 'Repeat';
+};
+
+interface ReportCardOLevelProps extends ReportCardProps {
+  optionalSubjects?: Array<{ id: string; name: string }>;
+  showResult?: boolean;
+}
+
+const ReportCardOLevel: React.FC<ReportCardOLevelProps> = (props) => {
+  const {
+    student,
+    grades,
+    term,
+    year,
+    classTeacher,
+    academicTerm,
+    positionInClass,
+    positionInStream,
+    totalStudentsInClass,
+    totalStudentsInStream,
+    optionalSubjects,
+    classTeacherComment,
+    headTeacherComment,
+    showResult,
+  } = props;
+
+  const gradesMap = new Map<string, Grade>();
+  grades.forEach((grade) => gradesMap.set(grade.subject, grade));
+
+  const allSubjects = [...O_LEVEL_FIXED_SUBJECTS];
+  optionalSubjects?.forEach((opt) => allSubjects.push(opt.name));
+  while (allSubjects.length < O_LEVEL_FIXED_SUBJECTS.length + 2) {
+    allSubjects.push('');
+  }
+
+  const totalScore = grades.reduce((sum, g) => sum + (g.final_score || 0), 0);
+  const averageScore = grades.length > 0 ? Math.round(totalScore / grades.length) : 0;
+
+  return (
+    <div
+      className="bg-white p-3 report-card report-card-olevel report-card-print max-w-[210mm] mx-auto font-serif text-black"
+      style={{ pageBreakInside: 'avoid' }}
+    >
+      <ReportCardOfficialHeader />
+      <ReportCardTemplateStudentInfo student={student} term={term} year={year} />
+
+      <table className="w-full border-collapse border border-gray-800 mb-1 text-[10px] rc-table">
+        <thead>
+          <tr>
+            <th className="border border-gray-800 px-1 py-0.5 text-left font-bold">SUBJECT</th>
+            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">MOT [40%]</th>
+            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">EOT [60%]</th>
+            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">Final score</th>
+            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">Grade</th>
+            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">Descriptor</th>
+            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">Teacher</th>
+          </tr>
+        </thead>
+        <tbody>
+          {allSubjects.map((subject, index) => {
+            const grade = gradesMap.get(subject);
+            return (
+              <tr key={index}>
+                <td className="border border-gray-800 px-1 py-0.5">{subject}</td>
+                <td className="border border-gray-800 px-1 py-0.5 text-center">{grade?.mot ?? ''}</td>
+                <td className="border border-gray-800 px-1 py-0.5 text-center">{grade?.eot ?? ''}</td>
+                <td className="border border-gray-800 px-1 py-0.5 text-center">{grade?.final_score ?? ''}</td>
+                <td className="border border-gray-800 px-1 py-0.5 text-center font-bold">{grade?.grade ?? ''}</td>
+                <td className="border border-gray-800 px-1 py-0.5 text-center">{grade?.descriptor ?? ''}</td>
+                <td className="border border-gray-800 px-1 py-0.5 text-center">{grade?.teacher ?? ''}</td>
+              </tr>
+            );
+          })}
+          <tr className="font-bold">
+            <td className="border border-gray-800 px-1 py-0.5">Overall % average score</td>
+            <td className="border border-gray-800 px-1 py-0.5" />
+            <td className="border border-gray-800 px-1 py-0.5" />
+            <td className="border border-gray-800 px-1 py-0.5 text-center">{averageScore}%</td>
+            <td className="border border-gray-800 px-1 py-0.5" colSpan={3} />
+          </tr>
+        </tbody>
+      </table>
+
+      <p className="text-[10px] mb-0.5">
+        Position in class: {ordinal(positionInClass)} out of {totalStudentsInClass || '—'} &nbsp;&nbsp;
+        position in stream: {ordinal(positionInStream)} out of {totalStudentsInStream || '—'}
+      </p>
+      {showResult && (
+        <p className="text-[10px] font-bold mb-1">Result: {getOLevelResult(averageScore)}</p>
+      )}
+
+      <ReportCardOfficialGradingScale />
+      <ReportCardTemplateFooter
+        classTeacher={classTeacher}
+        academicTerm={academicTerm}
+        classTeacherComment={classTeacherComment}
+        headTeacherComment={headTeacherComment}
+      />
+    </div>
+  );
+};
 
 interface ReportCardS1S2Props extends ReportCardProps {
   optionalSubjects?: Array<{ id: string; name: string }>;
 }
 
-const ReportCardS1S2: React.FC<ReportCardS1S2Props> = (props) => {
-  const { student, grades, term, year, classTeacher, headTeacher, academicTerm, positionInClass, positionInStream, totalStudentsInClass, totalStudentsInStream, optionalSubjects } = props;
-  
-  // Fixed subjects for S1-S2 as per template
-  const fixedSubjects = [
-    'Mathematics',
-    'History and Political Education',
-    'English',
-    'Geography',
-    'Physics',
-    'Biology',
-    'Chemistry',
-    'Physical education',
-    'Religious Education (CRE/IRE)',
-    'Entrepreneurship',
-    'Kiswahili',
-  ];
-
-  // Create a map of grades by subject name
-  const gradesMap = new Map<string, Grade>();
-  grades.forEach(grade => {
-    gradesMap.set(grade.subject, grade);
-  });
-
-  // Add optional subjects to the list
-  const allSubjects = [...fixedSubjects];
-  if (optionalSubjects && optionalSubjects.length > 0) {
-    optionalSubjects.forEach(opt => {
-      allSubjects.push(opt.name);
-    });
-  }
-  // Pad with empty slots if less than 2 optionals
-  while (allSubjects.length < fixedSubjects.length + 2) {
-    allSubjects.push('');
-  }
-
-  const totalScore = grades.reduce((sum, g) => sum + (g.final_score || 0), 0);
-  const averageScore = grades.length > 0 ? Math.round(totalScore / grades.length) : 0;
-
-  return (
-    <div className="bg-white border border-gray-400 p-4 report-card" style={{ pageBreakInside: 'avoid' }}>
-      <ReportCardHeader student={student} term={term} year={year} />
-      
-      <table className="w-full border-collapse border border-gray-800 mb-4 text-xs">
-        <thead>
-          <tr className="bg-gray-100">
-            <th className="border border-gray-800 px-1.5 py-1 text-left font-bold text-black">SUBJECT</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">MOT [40%]</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">EOT [60%]</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Final score</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Grade</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Teacher</th>
-          </tr>
-        </thead>
-        <tbody>
-          {allSubjects.map((subject, index) => {
-            const grade = gradesMap.get(subject);
-            return (
-              <tr key={index}>
-                <td className="border border-gray-800 px-1.5 py-1 text-black">{subject}</td>
-                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade?.mot || ''}</td>
-                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade?.eot || ''}</td>
-                <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{grade?.final_score || ''}</td>
-                <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{grade ? getGradeFromScore(grade.final_score || 0) : ''}</td>
-                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade ? getDescriptorFromGrade(getGradeFromScore(grade.final_score || 0)) : ''}</td>
-                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade?.teacher || ''}</td>
-              </tr>
-            );
-          })}
-          <tr className="bg-gray-100 font-bold">
-            <td className="border border-gray-800 px-1.5 py-1 text-black">Overall % average score</td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{averageScore}%</td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-          </tr>
-          <tr>
-            <td colSpan={7} className="border border-gray-800 px-1.5 py-1 text-black text-xs">Position in class: {ordinal(positionInClass)} out of {totalStudentsInClass || ''} &nbsp; Position in stream: {ordinal(positionInStream)} out of {totalStudentsInStream || ''}</td>
-          </tr>
-        </tbody>
-      </table>
-      <div className="mt-2 mb-2 text-sm font-semibold">Promoted to next class</div>
-      
-      <GradingScale />
-      <ReportCardSignatures classTeacher={classTeacher} headTeacher={headTeacher} academicTerm={academicTerm} />
-    </div>
-  );
-};
+const ReportCardS1S2: React.FC<ReportCardS1S2Props> = (props) => (
+  <ReportCardOLevel {...props} />
+);
 
 interface ReportCardS3S4Props extends ReportCardProps {
   optionalSubjects?: Array<{ id: string; name: string }>;
 }
 
-const ReportCardS3S4: React.FC<ReportCardS3S4Props> = (props) => {
-  const { student, grades, term, year, classTeacher, headTeacher, academicTerm, positionInClass, positionInStream, totalStudentsInClass, totalStudentsInStream, optionalSubjects } = props;
-  
-  // Fixed subjects for S3-S4 (same as S1-S2)
-  const fixedSubjects = [
-    'Mathematics',
-    'History and Political Education',
-    'English',
-    'Geography',
-    'Physics',
-    'Biology',
-    'Chemistry',
-    'Physical education',
-    'Religious Education (CRE/IRE)',
-    'Entrepreneurship',
-    'Kiswahili',
-  ];
-
-  const gradesMap = new Map<string, Grade>();
-  grades.forEach(grade => {
-    gradesMap.set(grade.subject, grade);
-  });
-
-  // Add optional subjects
-  const allSubjects = [...fixedSubjects];
-  if (optionalSubjects && optionalSubjects.length > 0) {
-    optionalSubjects.forEach(opt => {
-      allSubjects.push(opt.name);
-    });
-  }
-  while (allSubjects.length < fixedSubjects.length + 2) {
-    allSubjects.push('');
-  }
-
-  const totalScore = grades.reduce((sum, g) => sum + (g.final_score || 0), 0);
-  const averageScore = grades.length > 0 ? Math.round(totalScore / grades.length) : 0;
-
-  return (
-    <div className="bg-white border border-gray-400 p-4 report-card" style={{ pageBreakInside: 'avoid' }}>
-      <ReportCardHeader student={student} term={term} year={year} />
-      
-      <table className="w-full border-collapse border border-gray-800 mb-4 text-xs">
-        <thead>
-          <tr className="bg-gray-100">
-            <th className="border border-gray-800 px-1.5 py-1 text-left font-bold text-black">SUBJECT</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">MOT [40%]</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">EOT [60%]</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Final score</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Grade</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Teacher</th>
-          </tr>
-        </thead>
-        <tbody>
-          {allSubjects.map((subject, index) => {
-            const grade = gradesMap.get(subject);
-            return (
-              <tr key={index}>
-                <td className="border border-gray-800 px-1.5 py-1 text-black">{subject}</td>
-                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade?.mot || ''}</td>
-                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade?.eot || ''}</td>
-                <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{grade?.final_score || ''}</td>
-                <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{grade ? getGradeFromScore(grade.final_score || 0) : ''}</td>
-                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade ? getDescriptorFromGrade(getGradeFromScore(grade.final_score || 0)) : ''}</td>
-                <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{grade?.teacher || ''}</td>
-              </tr>
-            );
-          })}
-          <tr className="bg-gray-100 font-bold">
-            <td className="border border-gray-800 px-1.5 py-1 text-black">Overall % average score</td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{averageScore}%</td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-            <td className="border border-gray-800 px-1.5 py-1 text-center text-black"></td>
-          </tr>
-          <tr>
-            <td colSpan={7} className="border border-gray-800 px-1.5 py-1 text-black text-xs">Position in class: {ordinal(positionInClass)} out of {totalStudentsInClass || ''} &nbsp; Position in stream: {ordinal(positionInStream)} out of {totalStudentsInStream || ''}</td>
-          </tr>
-        </tbody>
-      </table>
-      <div className="mt-2 mb-2 text-sm font-semibold">Promoted to next class</div>
-
-      <GradingScale />
-      <ReportCardSignatures classTeacher={classTeacher} headTeacher={headTeacher} academicTerm={academicTerm} />
-    </div>
-  );
-};
+const ReportCardS3S4: React.FC<ReportCardS3S4Props> = (props) => (
+  <ReportCardOLevel {...props} showResult />
+);
 
 interface ReportCardS5S6Props extends ReportCardProps {
   assignedSubjects?: Array<{ id: string; name: string; subject_type: string }>;
 }
 
 const ReportCardS5S6: React.FC<ReportCardS5S6Props> = (props) => {
-  const { student, grades, term, year, classTeacher, headTeacher, academicTerm, assignedSubjects } = props;
+  const {
+    student,
+    grades,
+    term,
+    year,
+    classTeacher,
+    academicTerm,
+    assignedSubjects,
+    classTeacherComment,
+    headTeacherComment,
+  } = props;
 
-  // Create a map of grades by subject name
   const gradesMap = new Map<string, Grade>();
-  grades.forEach(grade => {
+  grades.forEach((grade) => {
     gradesMap.set(grade.subject, grade);
   });
 
-  // Display assigned subjects from combination
-  const displaySubjects = assignedSubjects?.filter(s => 
-    s.subject_type === 'principal' || s.subject_type === 'subsidiary' || s.subject_type === 'compulsory'
-  ) || [];
+  const findGrade = (subjectName: string) => {
+    if (!subjectName) return undefined;
+    const direct = gradesMap.get(subjectName);
+    if (direct) return direct;
+    const lower = subjectName.toLowerCase();
+    for (const [key, value] of gradesMap.entries()) {
+      if (key.toLowerCase() === lower) return value;
+    }
+    return undefined;
+  };
 
-  // Separate principal, general paper, and subsidiary
-  const principals = displaySubjects.filter(s => s.subject_type === 'principal');
-  const subsidiary = displaySubjects.find(s => s.subject_type === 'subsidiary');
-  const generalPaper = displaySubjects.find(s => s.subject_type === 'compulsory');
+  const principals = (assignedSubjects || []).filter((s) => s.subject_type === 'principal');
+  const generalPaper =
+    (assignedSubjects || []).find((s) => s.subject_type === 'compulsory') ||
+    (assignedSubjects || []).find((s) => s.name.toLowerCase().includes('general paper'));
+  const subsidiary = (assignedSubjects || []).find((s) => s.subject_type === 'subsidiary');
 
-  // Build the rows for display
-  const rowsToDisplay: Array<{ name: string; grade?: Grade; isSpecial?: boolean }> = [];
-  
-  // Add principal subjects
-  principals.forEach(p => {
-    rowsToDisplay.push({ name: p.name, grade: gradesMap.get(p.name) });
+  const subsidiaryLabel = (() => {
+    if (!subsidiary?.name) return 'Sub ICT or Sub Math';
+    const name = subsidiary.name.toLowerCase();
+    if (name.includes('ict')) return subsidiary.name;
+    if (name.includes('math')) return subsidiary.name;
+    return subsidiary.name;
+  })();
+
+  const principalRows = Array.from({ length: 3 }, (_, i) => {
+    const subject = principals[i];
+    return {
+      name: subject?.name || '',
+      grade: subject ? findGrade(subject.name) : undefined,
+    };
   });
 
-  // Add General Paper if exists
-  if (generalPaper) {
-    rowsToDisplay.push({ name: generalPaper.name, grade: gradesMap.get(generalPaper.name), isSpecial: true });
-  }
+  const fixedRows = [
+    ...principalRows,
+    {
+      name: generalPaper?.name || 'General Paper',
+      grade: generalPaper ? findGrade(generalPaper.name) : findGrade('General Paper'),
+    },
+    {
+      name: subsidiaryLabel,
+      grade: subsidiary ? findGrade(subsidiary.name) : undefined,
+    },
+  ];
 
-  // Add subsidiary if exists
-  if (subsidiary) {
-    rowsToDisplay.push({ name: subsidiary.name, grade: gradesMap.get(subsidiary.name), isSpecial: true });
-  }
-
-  // Ensure at least 5 rows (3 principals + general paper + subsidiary slot)
-  while (rowsToDisplay.length < 5) {
-    rowsToDisplay.push({ name: '' });
-  }
-
-  const totalPoints = grades.reduce((sum, g) => sum + (g.points || 0), 0);
+  const totalPoints =
+    student.total_uace_points ??
+    grades.reduce((sum, g) => sum + (g.uace_points ?? g.points ?? 0), 0);
 
   return (
-    <div className="bg-white border border-gray-400 p-4 report-card" style={{ pageBreakInside: 'avoid' }}>
-      <ReportCardHeader student={student} term={term} year={year} />
-      
-      <table className="w-full border-collapse border border-gray-800 mb-4 text-xs">
+    <div
+      className="bg-white p-3 report-card report-card-s5s6 report-card-print font-serif text-black max-w-[210mm] mx-auto"
+      style={{ pageBreakInside: 'avoid' }}
+    >
+      <ReportCardOfficialHeader />
+      <ReportCardTemplateStudentInfo
+        student={student}
+        term={term}
+        year={year}
+        showCombination
+      />
+
+      <table className="w-full border-collapse border border-gray-800 mb-1 text-xs">
         <thead>
-          <tr className="bg-gray-100">
-            <th className="border border-gray-800 px-1.5 py-1 text-left font-bold text-black">SUBJECT</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">MOT [40%]</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">EOT [60%]</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Final score</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Grade</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">Teacher</th>
+          <tr>
+            <th className="border border-gray-800 px-1.5 py-1 text-left font-bold">SUBJECT</th>
+            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold">MOT [40%]</th>
+            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold">EOT [60%]</th>
+            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold">Final score</th>
+            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold">Grade</th>
+            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold">Teacher</th>
           </tr>
         </thead>
         <tbody>
-          {rowsToDisplay.map((row, index) => (
+          {fixedRows.map((row, index) => (
             <tr key={index}>
-              <td className="border border-gray-800 px-1.5 py-1 text-black">{row.name}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{row.grade?.mot || ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{row.grade?.eot || ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{row.grade?.final_score || ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center font-bold text-black">{row.grade ? getGradeFromScore(row.grade.final_score || 0) : ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center text-black">{row.grade?.teacher || ''}</td>
+              <td className="border border-gray-800 px-1.5 py-1">{row.name}</td>
+              <td className="border border-gray-800 px-1.5 py-1 text-center">{row.grade?.mot ?? ''}</td>
+              <td className="border border-gray-800 px-1.5 py-1 text-center">{row.grade?.eot ?? ''}</td>
+              <td className="border border-gray-800 px-1.5 py-1 text-center">{row.grade?.final_score ?? ''}</td>
+              <td className="border border-gray-800 px-1.5 py-1 text-center font-bold">{row.grade?.grade ?? ''}</td>
+              <td className="border border-gray-800 px-1.5 py-1 text-center">{row.grade?.teacher ?? ''}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <div className="mt-2 mb-1 text-sm font-semibold">Total Points: {totalPoints || '0'}</div>
-      <div className="mt-1 mb-2 text-sm font-semibold">Promoted to next class</div>
-      
-      <GradingScale />
-      <ReportCardSignatures classTeacher={classTeacher} headTeacher={headTeacher} academicTerm={academicTerm} />
+
+      <p className="text-xs font-bold mt-1 mb-4">Total Points; {totalPoints}</p>
+
+      <ReportCardTemplateFooter
+        classTeacher={classTeacher}
+        academicTerm={academicTerm}
+        classTeacherComment={classTeacherComment}
+        headTeacherComment={headTeacherComment}
+      />
     </div>
   );
 };
@@ -833,7 +823,7 @@ export default function ReportsPage() {
     for (const cls of Object.keys(byClass)) {
       const ids = byClass[cls];
       // decide ranking metric: S5/S6 -> points, else avg
-      const usePoints = cls.toUpperCase() === 'S5' || cls.toUpperCase() === 'S6';
+      const usePoints = isSeniorSecondaryClass(cls);
       const sorted = [...ids].sort((a, b) => {
         const ma = metrics[a] || { avg: 0, points: 0 };
         const mb = metrics[b] || { avg: 0, points: 0 };
@@ -850,7 +840,7 @@ export default function ReportsPage() {
       const ids = byStream[streamKey];
       // stream's class is left part
       const cls = streamKey.split('-')[0];
-      const usePoints = cls.toUpperCase() === 'S5' || cls.toUpperCase() === 'S6';
+      const usePoints = isSeniorSecondaryClass(cls);
       const sorted = [...ids].sort((a, b) => {
         const ma = metrics[a] || { avg: 0, points: 0 };
         const mb = metrics[b] || { avg: 0, points: 0 };
@@ -959,13 +949,36 @@ export default function ReportsPage() {
             position: static !important;
           }
           @page {
-            margin: 6mm;
-            size: A4;
+            margin: 5mm;
+            size: A4 portrait;
           }
-          body, .report-card, .report-card * {
-            font-size: 11px !important;
+          body {
+            margin: 0 !important;
+            padding: 0 !important;
           }
-          .report-card { padding: 6px !important; }
+          .report-card-print {
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 3mm !important;
+            border: none !important;
+            box-shadow: none !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            font-size: 9px !important;
+            line-height: 1.15 !important;
+          }
+          .report-card-print * {
+            font-size: inherit !important;
+          }
+          .report-card-print .rc-table th,
+          .report-card-print .rc-table td {
+            padding: 1px 2px !important;
+            font-size: 8px !important;
+          }
+          .report-card-print img {
+            max-height: 68px !important;
+            width: auto !important;
+          }
         }
         @media screen {
           .print-only {
@@ -1130,7 +1143,7 @@ export default function ReportsPage() {
                           <h4 className="font-semibold text-black">{student.full_name}</h4>
                           <p className="text-sm text-black">
                             {student.class} - {student.stream}
-                            {(student.class === 'S5' || student.class === 'S6') && student.subject_combination && (
+                            {isSeniorSecondaryClass(student.class) && student.subject_combination && (
                               <span className="ml-2 text-blue-600">({student.subject_combination})</span>
                             )}
                           </p>

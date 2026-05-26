@@ -99,7 +99,7 @@ export default function StudentDashboard() {
   };
 
   const handleBackToWebsite = () => {
-    window.location.href = '/api/auth/logout?redirect=http://localhost:3000';
+    window.location.href = '/api/auth/logout?redirect=website';
   };
 
   if (loading) {

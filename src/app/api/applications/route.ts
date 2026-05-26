@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabasePublic } from '@/lib/supabase';
+import { requireAdminSession } from '@/lib/auth-session';
 
 // GET all applications
 export async function GET() {
   try {
+    const auth = await requireAdminSession();
+    if (auth instanceof NextResponse) return auth;
     const { data: applications, error } = await supabasePublic
       .from('applications')
       .select('*')

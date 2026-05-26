@@ -59,7 +59,7 @@ export default function TeacherSidebar({ sidebarOpen, setSidebarOpen }: TeacherS
   };
 
   const handleBackToWebsite = () => {
-    window.location.href = '/api/auth/logout?redirect=http://localhost:3000';
+    window.location.href = '/api/auth/logout?redirect=website';
   };
 
   const isActive = (href: string) => {

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireAdminSession } from '@/lib/auth-session';
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdminSession();
+    if (auth instanceof NextResponse) return auth;
     console.log('Starting dashboard overview - fetching actual records...');
 
     // Fetch all records and count them directly

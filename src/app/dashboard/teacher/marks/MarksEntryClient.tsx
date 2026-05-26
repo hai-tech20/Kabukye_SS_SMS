@@ -118,6 +118,7 @@ export default function MarksEntryClient({
   // Refs for request deduplication
   const abortControllerRef = useRef<AbortController | null>(null);
   const isFetchingRef = useRef(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const isALevel = selectedClass?.toLowerCase().includes('s5') || selectedClass?.toLowerCase().includes('s6');
   const filteredStudents = useMemo(() => {
@@ -283,22 +284,20 @@ export default function MarksEntryClient({
               if (!paperScores[paper.paper_number]) {
                 paperScores[paper.paper_number] = {};
               }
-              // Determine if MOT or EOT based on some logic or store separately
               paperScores[paper.paper_number].mot = paper.score;
             }
           }
           
-          // Also check direct columns p1_score, p2_score, p3_score (legacy support)
-          const currentSet = selectedSet; // MOT or EOT
-          
+          const hasSinglePaper = paperCount === 1;
+          const motP1 = existingGrade?.p1_score ?? paperScores[1]?.mot;
+          const eotP1 = existingGrade?.p1_eot_score ?? paperScores[1]?.eot;
+
           return {
             student_id: s.id,
-            // MOT papers - from p1_score, p2_score, p3_score when available
-            mot_p1: existingGrade?.p1_score ?? paperScores[1]?.mot ?? undefined,
+            mot_p1: motP1 !== undefined ? motP1 : (hasSinglePaper ? existingGrade?.mot_score : undefined),
             mot_p2: existingGrade?.p2_score ?? paperScores[2]?.mot ?? undefined,
             mot_p3: existingGrade?.p3_score ?? paperScores[3]?.mot ?? undefined,
-            // EOT papers - stored separately or calculated
-            eot_p1: existingGrade?.p1_eot_score ?? paperScores[1]?.eot ?? undefined,
+            eot_p1: eotP1 !== undefined ? eotP1 : (hasSinglePaper ? existingGrade?.eot_score : undefined),
             eot_p2: existingGrade?.p2_eot_score ?? paperScores[2]?.eot ?? undefined,
             eot_p3: existingGrade?.p3_eot_score ?? paperScores[3]?.eot ?? undefined
           };
@@ -322,7 +321,7 @@ export default function MarksEntryClient({
     return () => {
       abortControllerRef.current?.abort();
     };
-  }, [selectedClass, selectedStream, selectedSubject, selectedTerm, selectedYear]);
+  }, [selectedClass, selectedStream, selectedSubject, selectedTerm, selectedYear, selectedSet, reloadKey]);
 
   const handleGradeChange = (student_id: string, field: string, value: string) => {
     const numValue = value === '' ? undefined : parseInt(value);
@@ -428,6 +427,8 @@ export default function MarksEntryClient({
       }
       
       setHasEdits(false);
+      // Trigger a reload to fetch the latest saved marks (MOT/EOT)
+      setReloadKey(k => k + 1);
       alert('Grades saved successfully!');
     } catch (error: any) {
       console.error('Error saving grades:', error);

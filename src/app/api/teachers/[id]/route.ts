@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
+import { requireAdminSession, requireSession } from '@/lib/auth-session';
 
 // Helper function to validate teacher ID
 function validateTeacherId(id: string): boolean {
@@ -23,6 +24,9 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requireAdminSession();
+    if (auth instanceof NextResponse) return auth;
+
     const teacherId = params.id;
     
     // Validate teacher ID

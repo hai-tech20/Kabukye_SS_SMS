@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireSession, assertStudentSelf } from '@/lib/auth-session';
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireSession();
+    if (auth instanceof NextResponse) return auth;
+
     const { searchParams } = new URL(request.url);
     const studentId = searchParams.get('student_id');
 
     if (studentId) {
+      const denied = assertStudentSelf(auth, studentId);
+      if (denied) return denied;
       // Fetch specific student report cards
       const { data, error } = await supabaseAdmin
         .from('report_cards')
@@ -20,7 +26,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ data });
     }
 
-    // Default: fetch published report settings
+    if (auth.role !== 'admin' && auth.role !== 'bursar') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { data, error } = await supabaseAdmin
       .from('report_settings')
       .select('*')

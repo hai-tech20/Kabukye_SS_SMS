@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, withRetry } from '@/lib/supabase';
 import { getCurrentTerm } from '@/lib/academic-calendar';
+import { requireStaff, requireAdminSession } from '@/lib/auth-session';
 
 // Simple in-memory cache for reference data (classes/streams/subjects change rarely)
 const CACHE_TTL = 30000; // 30 seconds
@@ -8,6 +9,9 @@ let cache: { data: any; timestamp: number } | null = null;
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireStaff();
+    if (auth instanceof NextResponse) return auth;
+
     const now = Date.now();
     
     // Return cached data if fresh
@@ -99,6 +103,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdminSession();
+    if (auth instanceof NextResponse) return auth;
+
     const body = await request.json();
     
     const { data, error } = await supabaseAdmin
