@@ -1181,7 +1181,7 @@ export default function ReportsPage() {
 
   return (
     <div className="h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex overflow-hidden">
-      <style jsx>{`
+      <style>{`
         @media print {
           .no-print {
             display: none !important;
