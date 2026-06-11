@@ -3,7 +3,16 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { getCurrentTerm } from '@/lib/academic-calendar';
+import { withRetry } from '@/lib/supabase';
 import AdminSidebar from '@/components/sidebar/AdminSidebar';
+
+// Helper function for fetch with retry
+const fetchWithRetry = async (url: string, options?: RequestInit) => {
+  return await withRetry(async () => {
+    const response = await fetch(url, options);
+    return response;
+  }, 3, 1000);
+};
 
 interface Student {
   id: string;
@@ -781,7 +790,7 @@ export default function ReportsPage() {
 
   const fetchClassesAndStreams = async () => {
     try {
-      const response = await fetch('/api/classes');
+      const response = await fetchWithRetry('/api/classes');
       const result = await response.json();
       if (result.data) {
         setClasses(result.data.classes || []);
@@ -800,7 +809,7 @@ export default function ReportsPage() {
       const key = `${student.class}-${student.stream}`;
       if (!teacherMap[key]) {
         try {
-          const response = await fetch(`/api/students/${student.id}/class-teacher`);
+          const response = await fetchWithRetry(`/api/students/${student.id}/class-teacher`);
           if (response.ok) {
             const result = await response.json();
             teacherMap[key] = result.data || 'Not Assigned';
@@ -860,7 +869,7 @@ export default function ReportsPage() {
         
         if (classLevel === 'S1-S2' || classLevel === 'S3-S4') {
           // Fetch optional subjects for S1-S4
-          const response = await fetch(`/api/student-optional-subjects?student_id=${previewStudent.id}`);
+          const response = await fetchWithRetry(`/api/student-optional-subjects?student_id=${previewStudent.id}`);
           if (response.ok) {
             const result = await response.json();
             const optionalSubjects = (result.data || []).map((item: any) => ({
@@ -871,7 +880,7 @@ export default function ReportsPage() {
           }
         } else if (classLevel === 'S5-S6') {
           // Fetch assigned subjects for S5-S6
-          const response = await fetch(`/api/student-subjects?student_id=${previewStudent.id}`);
+          const response = await fetchWithRetry(`/api/student-subjects?student_id=${previewStudent.id}`);
           if (response.ok) {
             const result = await response.json();
             const assignedSubjects = (result.data || []).map((item: any) => ({
@@ -885,7 +894,7 @@ export default function ReportsPage() {
         }
 
         // Fetch comments and term dates for the preview
-        const reportResponse = await fetch(`/api/report?student_id=${previewStudent.id}&term=${selectedTerm}&year=${selectedYear}`);
+        const reportResponse = await fetchWithRetry(`/api/report?student_id=${previewStudent.id}&term=${selectedTerm}&year=${selectedYear}`);
         if (reportResponse.ok) {
           const reportResult = await reportResponse.json();
           const comments = reportResult.data?.comments || {};
@@ -897,7 +906,7 @@ export default function ReportsPage() {
           setPreviewComments(null);
         }
 
-        const academicResponse = await fetch('/api/academic/overview');
+        const academicResponse = await fetchWithRetry('/api/academic/overview');
         if (academicResponse.ok) {
           const overview = await academicResponse.json();
           const yearItem = (overview.academic_years || []).find((y: any) => y.year_label === selectedYear);
@@ -941,7 +950,7 @@ export default function ReportsPage() {
       let transformedStudents: Student[] = [];
       
       if (selectedClass === 'ALL' && selectedStream === 'ALL') {
-        const studentsResponse = await fetch('/api/students');
+        const studentsResponse = await fetchWithRetry('/api/students');
         const studentsResult = await studentsResponse.json();
         
         if (studentsResponse.ok) {
@@ -954,7 +963,7 @@ export default function ReportsPage() {
           fetchClassTeachers(transformedStudents);
         }
 
-        const gradesResponse = await fetch(`/api/reports?term=${selectedTerm}&year=${selectedYear}`);
+        const gradesResponse = await fetchWithRetry(`/api/reports?term=${selectedTerm}&year=${selectedYear}`);
         const gradesResult = await gradesResponse.json();
         
         if (gradesResponse.ok) {
@@ -986,7 +995,7 @@ export default function ReportsPage() {
           params.append('stream_id', selectedStream);
         }
         
-        const studentsResponse = await fetch(`/api/students?${params.toString()}`);
+        const studentsResponse = await fetchWithRetry(`/api/students?${params.toString()}`);
         const studentsResult = await studentsResponse.json();
         
         if (studentsResponse.ok) {
@@ -1005,7 +1014,7 @@ export default function ReportsPage() {
         if (selectedClass !== 'ALL') gradesParams.append('class_id', selectedClass.toLowerCase());
         if (selectedStream !== 'ALL') gradesParams.append('stream_id', selectedStream);
         
-        const gradesResponse = await fetch(`/api/reports?${gradesParams.toString()}`);
+        const gradesResponse = await fetchWithRetry(`/api/reports?${gradesParams.toString()}`);
         const gradesResult = await gradesResponse.json();
         
         if (gradesResponse.ok) {
