@@ -3,16 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { getCurrentTerm } from '@/lib/academic-calendar';
-import { withRetry } from '@/lib/supabase';
 import AdminSidebar from '@/components/sidebar/AdminSidebar';
-
-// Helper function for fetch with retry
-const fetchWithRetry = async (url: string, options?: RequestInit) => {
-  return await withRetry(async () => {
-    const response = await fetch(url, options);
-    return response;
-  }, 3, 1000);
-};
 
 interface Student {
   id: string;
@@ -783,6 +774,7 @@ export default function ReportsPage() {
   const [previewAssignedSubjects, setPreviewAssignedSubjects] = useState<Array<{ id: string; name: string; subject_type: string }>>([]);
   const [previewComments, setPreviewComments] = useState<{ class_teacher_comment?: string; head_teacher_comment?: string } | null>(null);
   const [previewAcademicTerm, setPreviewAcademicTerm] = useState<AcademicTerm | null>(null);
+  const [printAllReports, setPrintAllReports] = useState(false);
 
   useEffect(() => {
     fetchClassesAndStreams();
@@ -1176,11 +1168,18 @@ export default function ReportsPage() {
   };
 
   const handlePrintFromPreview = () => {
-    // Close preview modal then trigger print
-    setShowPreview(false);
+    // Don't close the preview! We need the report card to be in the DOM when we print
+    window.print();
+  };
+
+  const handlePrintAll = () => {
+    setPrintAllReports(true);
     setTimeout(() => {
       window.print();
-    }, 50);
+      setTimeout(() => {
+        setPrintAllReports(false);
+      }, 500);
+    }, 100);
   };
 
   const handleClosePreview = () => {
@@ -1349,7 +1348,7 @@ export default function ReportsPage() {
               </div>
               <div className="flex space-x-3 flex-wrap">
                 <button
-                  onClick={() => window.print()}
+                  onClick={handlePrintAll}
                   className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-md font-bold"
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1436,6 +1435,44 @@ export default function ReportsPage() {
               </svg>
               <h3 className="text-lg font-medium text-black mb-2">No Students Found</h3>
               <p className="text-black">No students found for the selected class and stream combination.</p>
+            </div>
+          )}
+
+          {/* Print All Reports Section */}
+          {printAllReports && (
+            <div className="print-only">
+              {students.map((student) => {
+                const classLevel = getClassLevel(student.class);
+                let optionalSubjectsForStudent: Array<{ id: string; name: string }> = [];
+                let assignedSubjectsForStudent: Array<{ id: string; subject_id?: string; name: string; subject_type: string }> = [];
+                
+                if (classLevel === 'S1-S2' || classLevel === 'S3-S4') {
+                  optionalSubjectsForStudent = previewOptionalSubjects;
+                } else {
+                  assignedSubjectsForStudent = previewAssignedSubjects;
+                }
+
+                return (
+                  <ReportCard
+                    key={student.id}
+                    student={student}
+                    grades={grades.filter(g => g.student_id === student.id)}
+                    term={selectedTerm}
+                    year={selectedYear}
+                    classTeacher={classTeachers[`${student.class}-${student.stream}`] || 'Not Assigned'}
+                    headTeacher="Mr. ISABIRYE SALEH"
+                    classTeacherComment={(student as any)?.auto_class_teacher_comment || ''}
+                    headTeacherComment={(student as any)?.auto_head_teacher_comment || ''}
+                    academicTerm={previewAcademicTerm || undefined}
+                    optionalSubjects={optionalSubjectsForStudent}
+                    assignedSubjects={assignedSubjectsForStudent}
+                    positionInClass={(student as any)?._positionInClass}
+                    positionInStream={(student as any)?._positionInStream}
+                    totalStudentsInClass={(window as any).__report_positions?.totals?.byClass?.[student.class]}
+                    totalStudentsInStream={(window as any).__report_positions?.totals?.byStream?.[`${student.class}-${student.stream}`]}
+                  />
+                );
+              })}
             </div>
           )}
 
