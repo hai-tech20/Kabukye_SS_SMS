@@ -24,10 +24,15 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const auth = await requireAdminSession();
+    const auth = await requireSession();
     if (auth instanceof NextResponse) return auth;
 
     const teacherId = params.id;
+
+    // If user is not admin, then they can only fetch their own information
+    if (auth.role !== 'admin' && auth.id !== teacherId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     
     // Validate teacher ID
     if (!validateTeacherId(teacherId)) {

@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const studentId = searchParams.get('student_id');
+    const classId = searchParams.get('class_id');
 
     if (studentId) {
       const denied = assertStudentSelf(auth, studentId);
@@ -17,7 +18,6 @@ export async function GET(request: NextRequest) {
     } else if (auth.role === 'student') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    const classId = searchParams.get('class_id');
 
     let query = supabaseAdmin
       .from('student_subjects')
@@ -28,7 +28,6 @@ export async function GET(request: NextRequest) {
         subject_type,
         is_principal,
         is_active,
-        subjects(id, name, subject_type),
         students(id, full_name, class_id, stream_id, subject_combination)
       `)
       .eq('is_active', true);
@@ -39,11 +38,33 @@ export async function GET(request: NextRequest) {
       query = query.eq('students.class_id', classId);
     }
 
-    const { data, error } = await query.order('created_at', { ascending: true });
+    const { data: studentSubjects, error } = await query.order('created_at', { ascending: true });
 
     if (error) throw error;
 
-    return NextResponse.json({ data: data || [] });
+    // Fetch all subjects in one query
+    let subjectsData: any[] = [];
+    if (studentSubjects && studentSubjects.length > 0) {
+      const subjectIds = Array.from(new Set(studentSubjects.map((ss: any) => ss.subject_id)));
+      
+      const { data: subjects } = await supabaseAdmin
+        .from('subjects')
+        .select('id, name, subject_type')
+        .in('id', subjectIds);
+      
+      if (subjects) subjectsData = subjects;
+    }
+
+    // Create subject map
+    const subjectMap = new Map(subjectsData.map((s: any) => [s.id, s]));
+
+    // Combine
+    const finalData = studentSubjects.map((ss: any) => ({
+      ...ss,
+      subjects: subjectMap.get(ss.subject_id) || null
+    }));
+
+    return NextResponse.json({ data: finalData || [] });
   } catch (error) {
     console.error('Error fetching student subjects:', error);
     return NextResponse.json({ error: 'Failed to fetch student subjects' }, { status: 500 });

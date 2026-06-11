@@ -16,6 +16,9 @@ export async function GET(request: NextRequest) {
     const year = searchParams.get('year');
     const subjectId = searchParams.get('subject_id');
     let studentId = searchParams.get('student_id');
+    
+    // Also ensure we use academic_year from search params if present (fallback to year)
+    const academicYear = searchParams.get('academic_year') || year;
 
     if (session.role === 'student') {
       if (studentId && studentId !== session.id) {
@@ -36,7 +39,7 @@ export async function GET(request: NextRequest) {
         teachers(full_name),
         grade_papers(paper_number, assessment_type, score)
       `)
-      .eq('academic_year', year || '2026')
+      .eq('academic_year', academicYear || '2026')
       .eq('term', term || '1');
 
     if (classId) query = query.eq('class_id', classId);
@@ -106,24 +109,25 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Map paper scores by MOT/EOT
+      // Map paper scores by MOT/EOT from grade_papers
       const papers = grade.grade_papers || [];
-      const p1Mot = papers.find((p: any) => p.paper_number === 1 && p.assessment_type === 'MOT')?.score;
-      const p2Mot = papers.find((p: any) => p.paper_number === 2 && p.assessment_type === 'MOT')?.score;
-      const p3Mot = papers.find((p: any) => p.paper_number === 3 && p.assessment_type === 'MOT')?.score;
-      const p1Eot = papers.find((p: any) => p.paper_number === 1 && p.assessment_type === 'EOT')?.score;
-      const p2Eot = papers.find((p: any) => p.paper_number === 2 && p.assessment_type === 'EOT')?.score;
-      const p3Eot = papers.find((p: any) => p.paper_number === 3 && p.assessment_type === 'EOT')?.score;
+      const p1Mot = grade.p1_score ?? papers.find((p: any) => p.paper_number === 1 && p.assessment_type === 'MOT')?.score;
+      const p2Mot = grade.p2_score ?? papers.find((p: any) => p.paper_number === 2 && p.assessment_type === 'MOT')?.score;
+      const p3Mot = grade.p3_score ?? papers.find((p: any) => p.paper_number === 3 && p.assessment_type === 'MOT')?.score;
+      const p1Eot = grade.p1_eot_score ?? papers.find((p: any) => p.paper_number === 1 && p.assessment_type === 'EOT')?.score;
+      const p2Eot = grade.p2_eot_score ?? papers.find((p: any) => p.paper_number === 2 && p.assessment_type === 'EOT')?.score;
+      const p3Eot = grade.p3_eot_score ?? papers.find((p: any) => p.paper_number === 3 && p.assessment_type === 'EOT')?.score;
 
       return {
         ...grade,
         points,
-        p1_score: p1Mot,
-        p2_score: p2Mot,
-        p3_score: p3Mot,
-        p1_eot_score: p1Eot,
-        p2_eot_score: p2Eot,
-        p3_eot_score: p3Eot
+        // Prefer direct grade row fields, fallback to grade_papers rows if present.
+        mot_p1: p1Mot,
+        mot_p2: p2Mot,
+        mot_p3: p3Mot,
+        eot_p1: p1Eot,
+        eot_p2: p2Eot,
+        eot_p3: p3Eot
       };
     });
 
@@ -140,10 +144,28 @@ export async function POST(request: NextRequest) {
     if (auth instanceof NextResponse) return auth;
     const session = auth;
 
-    const gradesData = await request.json();
+    let gradesData: any;
+    try {
+      gradesData = await request.json();
+    } catch (err) {
+      console.error('Grades API - Invalid JSON body:', err);
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
     console.log('Grades API - Received data:', gradesData);
     const teacherId = session.id;
     console.log('Grades API - Teacher ID:', teacherId);
+
+    // Ensure all text fields are strings and trim whitespace
+    gradesData = gradesData.map((g: any) => ({
+      ...g,
+      student_id: String(g.student_id).trim(),
+      class_id: String(g.class_id).trim(),
+      stream_id: String(g.stream_id).trim(),
+      subject_id: String(g.subject_id).trim(),
+      term: String(g.term).trim(),
+      academic_year: String(g.academic_year).trim()
+    }));
 
     if (!Array.isArray(gradesData) || gradesData.length === 0) {
       return NextResponse.json({ error: 'No grades provided' }, { status: 400 });
@@ -155,13 +177,17 @@ export async function POST(request: NextRequest) {
     const classId = sampleGrade.class_id;
     const streamId = sampleGrade.stream_id;
 
+    // Trim these too!
+    const trimmedAcademicYear = String(academicYear).trim();
+    const trimmedTerm = String(term).trim();
+    
     const { data: publishedReports, error: publishedError } = await supabaseAdmin
       .from('published_reports')
       .select('id')
-      .eq('academic_year', academicYear)
-      .eq('term', term)
-      .eq('class_id', classId)
-      .eq('stream_id', streamId)
+      .eq('academic_year', trimmedAcademicYear)
+      .eq('term', trimmedTerm)
+      .eq('class_id', String(classId).trim())
+      .eq('stream_id', String(streamId).trim())
       .limit(1);
 
     if (publishedError) {
@@ -181,8 +207,8 @@ export async function POST(request: NextRequest) {
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from('report_settings')
       .select('mot_weight, eot_weight, assessment_count, is_published')
-      .eq('academic_year', academicYear)
-      .eq('term', term)
+      .eq('academic_year', trimmedAcademicYear)
+      .eq('term', trimmedTerm)
       .maybeSingle();
 
     console.log('Grades API - Settings fetch result:', settings, 'Error:', settingsError);
@@ -212,14 +238,49 @@ export async function POST(request: NextRequest) {
 
     for (const grade of gradesData) {
       if (session.role === 'teacher') {
+        const trimmedTeacherId = String(session.id).trim();
+        const trimmedClassId = String(grade.class_id).trim();
+        const trimmedStreamId = String(grade.stream_id).trim();
+        const trimmedSubjectId = String(grade.subject_id).trim();
+        
+        // Debug logging: print what we're checking (trimmed) with lengths
+        console.log('Grades API: Checking teacher assignment for (trimmed):', {
+          teacherId: trimmedTeacherId,
+          teacherIdLength: trimmedTeacherId.length,
+          classId: trimmedClassId,
+          classIdLength: trimmedClassId.length,
+          streamId: trimmedStreamId,
+          streamIdLength: trimmedStreamId.length,
+          subjectId: trimmedSubjectId,
+          subjectIdLength: trimmedSubjectId.length
+        });
+        
+        // First get all assignments for this teacher to debug
+        const { data: allAssignments } = await supabaseAdmin
+          .from('teacher_subjects')
+          .select('*')
+          .eq('teacher_id', trimmedTeacherId);
+        console.log('Grades API: All teacher assignments:', allAssignments?.map(a => ({
+          teacher_id: a.teacher_id,
+          teacher_id_length: a.teacher_id?.length,
+          class_id: a.class_id,
+          class_id_length: a.class_id?.length,
+          stream_id: a.stream_id,
+          stream_id_length: a.stream_id?.length,
+          subject_id: a.subject_id,
+          subject_id_length: a.subject_id?.length
+        })));
+        
+        // Check if teacher is assigned to this class and subject (any stream!)
         const { data: assignment } = await supabaseAdmin
           .from('teacher_subjects')
           .select('id')
-          .eq('teacher_id', session.id)
-          .eq('class_id', grade.class_id)
-          .eq('stream_id', grade.stream_id)
-          .eq('subject_id', grade.subject_id)
+          .eq('teacher_id', trimmedTeacherId)
+          .eq('class_id', trimmedClassId)
+          .eq('subject_id', trimmedSubjectId)
           .limit(1);
+        console.log('Grades API: Assignment check result (any stream):', assignment);
+        
         if (!assignment?.length) {
           return NextResponse.json(
             { error: 'You are not assigned to this class, stream, and subject.' },
@@ -289,72 +350,88 @@ export async function POST(request: NextRequest) {
         descriptor = gradeScale?.descriptor || 'Elementary';
       }
 
-      // 1. Check for existing grade by student/subject/class/stream/term/year with retry
+      // 1. Check for existing grade using natural key (ensure all are strings and trimmed)
       const { data: existingGrades, error: lookupError } = await withRetry(async () =>
         await supabaseAdmin
           .from('grades')
           .select('id')
-          .eq('student_id', grade.student_id)
-          .eq('subject_id', grade.subject_id)
-          .eq('class_id', grade.class_id)
-          .eq('stream_id', grade.stream_id)
-          .eq('term', grade.term)
-          .eq('academic_year', grade.academic_year)
+          .eq('student_id', String(grade.student_id).trim())
+          .eq('subject_id', String(grade.subject_id).trim())
+          .eq('class_id', String(grade.class_id).trim())
+          .eq('stream_id', String(grade.stream_id).trim())
+          .eq('term', String(grade.term).trim())
+          .eq('academic_year', String(grade.academic_year).trim())
           .order('created_at', { ascending: false })
           .limit(1)
       );
-      
+
       if (lookupError) {
         console.log(`Grades API: Error looking up existing grade for student ${grade.student_id}:`, lookupError);
       }
-      
+
       const existingGrade = existingGrades && existingGrades.length > 0 ? existingGrades[0] : null;
-      
-      // Use existing ID if found, otherwise generate new one
-      const gradeId = existingGrade?.id || crypto.randomUUID();
-      
-      console.log(`Grades API: ${existingGrade ? 'Found existing grade' : 'No existing grade'} for student ${grade.student_id}, using ID: ${gradeId}`);
-      
+
+      // Prepare the data - generate an id for new grades, trim everything, ensure text fields are strings
       const upsertData: any = {
-        id: gradeId,
-        student_id: grade.student_id,
-        subject_id: grade.subject_id,
-        teacher_id: teacherId,
-        class_id: grade.class_id,
-        stream_id: grade.stream_id,
-        term: grade.term,
-        academic_year: grade.academic_year,
-        assessment_count: effectiveSettings.assessment_count
+        id: existingGrade ? existingGrade.id : `grade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        student_id: String(grade.student_id).trim(),
+        subject_id: String(grade.subject_id).trim(),
+        teacher_id: String(teacherId).trim(),
+        class_id: String(grade.class_id).trim(),
+        stream_id: String(grade.stream_id).trim(),
+        term: String(grade.term).trim(),
+        academic_year: String(grade.academic_year).trim(),
+        updated_at: new Date().toISOString()
       };
+
+      if (!existingGrade) {
+        upsertData.created_at = new Date().toISOString();
+      }
       
       // Only include scores if they exist
       if (motScore !== undefined && motScore !== null) upsertData.mot_score = motScore;
       if (eotScore !== undefined && eotScore !== null) upsertData.eot_score = eotScore;
-      if (grade.mot_p1 !== undefined && grade.mot_p1 !== null) upsertData.p1_score = grade.mot_p1;
-      if (grade.eot_p1 !== undefined && grade.eot_p1 !== null) upsertData.p1_eot_score = grade.eot_p1;
-      if (grade.mot_p2 !== undefined && grade.mot_p2 !== null) upsertData.p2_score = grade.mot_p2;
-      if (grade.eot_p2 !== undefined && grade.eot_p2 !== null) upsertData.p2_eot_score = grade.eot_p2;
-      if (grade.mot_p3 !== undefined && grade.mot_p3 !== null) upsertData.p3_score = grade.mot_p3;
-      if (grade.eot_p3 !== undefined && grade.eot_p3 !== null) upsertData.p3_eot_score = grade.eot_p3;
       if (finalScore !== null) upsertData.final_score = finalScore;
       if (gradeLabel !== null) {
         upsertData.grade = gradeLabel;
         upsertData.descriptor = descriptor;
       }
 
-      console.log(`Grades API: ${existingGrade ? 'Updating' : 'Creating'} grade for student ${grade.student_id} with ID ${gradeId}`);
+      console.log(`Grades API: ${existingGrade ? 'Updating' : 'Creating'} grade for student ${grade.student_id}`);
+      console.log("Grades API: upsertData is:", upsertData);
+      
+      let upsertedGrade;
+      let gradeError;
 
-          const { data: upsertedGrade, error: gradeError } = await withRetry(async () =>
-        await supabaseAdmin
-          .from('grades')
-          .upsert(upsertData, { onConflict: 'id' })
-          .select()
-          .single()
-      );
+      if (existingGrade) {
+        // Update existing grade
+        const { data, error } = await withRetry(async () =>
+          await supabaseAdmin
+            .from('grades')
+            .update(upsertData)
+            .eq('id', existingGrade.id)
+            .select()
+        );
+        console.log("Grades API: Update response:", data, "Error:", error);
+        upsertedGrade = data && data.length > 0 ? data[0] : null;
+        gradeError = error;
+      } else {
+        // Insert new grade
+        const { data, error } = await withRetry(async () =>
+          await supabaseAdmin
+            .from('grades')
+            .insert(upsertData)
+            .select()
+        );
+        console.log("Grades API: Insert response:", data, "Error:", error);
+        upsertedGrade = data && data.length > 0 ? data[0] : null;
+        gradeError = error;
+      }
 
       if (gradeError) {
         console.error('Grade upsert error:', gradeError);
-        throw gradeError;
+        const gradeErrorMessage = gradeError?.message || JSON.stringify(gradeError) || 'Failed to save grade';
+        return NextResponse.json({ error: gradeErrorMessage }, { status: 500 });
       }
 
       // 2. Delete old paper scores for this grade to ensure clean update
@@ -373,21 +450,32 @@ export async function POST(request: NextRequest) {
       
       // 3. Save new individual paper scores if they exist
       if (paperScores.length > 0 && upsertedGrade?.id) {
-        for (const ps of paperScores) {
-          const { error: paperError } = await withRetry(async () =>
-            await supabaseAdmin
-              .from('grade_papers')
-              .upsert({
-                grade_id: upsertedGrade.id,
-                paper_number: ps.number,
-                assessment_type: ps.assessment_type,
-                score: ps.score
-              }, { onConflict: 'grade_id,paper_number,assessment_type' })
-          );
-          if (paperError) {
-            console.error('Paper score upsert error:', paperError);
+        const paperData = paperScores.map(ps => ({
+          id: crypto.randomUUID(), // use UUID for grade_papers
+          grade_id: upsertedGrade.id,
+          paper_number: ps.number,
+          assessment_type: ps.assessment_type,
+          score: ps.score
+        }));
+
+        const { data: paperInsertData, error: paperError } = await withRetry(async () =>
+          await supabaseAdmin
+            .from('grade_papers')
+            .upsert(paperData, { onConflict: ['grade_id', 'paper_number', 'assessment_type'] })
+            .select()
+        );
+
+        if (paperError) {
+          console.error('Paper score insert error:', paperError);
+          if (paperError.code === '23505' && paperError.details?.includes('grade_id, paper_number')) {
+            return NextResponse.json({
+              error: 'grade_papers table is still using the legacy unique constraint on (grade_id, paper_number). Run the grade_papers schema migration to support separate MOT and EOT rows.',
+            }, { status: 500 });
           }
+          return NextResponse.json({ error: 'Failed to save paper scores' }, { status: 500 });
         }
+
+        console.log('Grades API: saved grade_papers rows:', paperInsertData);
       }
 }
 

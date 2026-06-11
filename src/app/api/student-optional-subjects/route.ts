@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { requireSession, requireAdminSession, assertStudentSelf } from '@/lib/auth-session';
+import { requireSession, assertStudentSelf } from '@/lib/auth-session';
 
 export async function GET(request: Request) {
   try {
@@ -20,15 +20,14 @@ export async function GET(request: Request) {
     const denied = assertStudentSelf(auth, student_id);
     if (denied) return denied;
 
-    const { data, error } = await supabaseAdmin
+    const { data: optionalSubjects, error } = await supabaseAdmin
       .from('student_optional_subjects')
       .select(`
         id,
         student_id,
         subject_id,
         assigned_by,
-        assigned_at,
-        subjects:subject_id(id, name)
+        assigned_at
       `)
       .eq('student_id', student_id);
 
@@ -40,7 +39,29 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({ data: data || [] });
+    // Fetch all subjects in one query
+    let subjectsData: any[] = [];
+    if (optionalSubjects && optionalSubjects.length > 0) {
+      const subjectIds = Array.from(new Set(optionalSubjects.map((os: any) => os.subject_id)));
+      
+      const { data: subjects } = await supabaseAdmin
+        .from('subjects')
+        .select('id, name')
+        .in('id', subjectIds);
+      
+      if (subjects) subjectsData = subjects;
+    }
+
+    // Create subject map
+    const subjectMap = new Map(subjectsData.map((s: any) => [s.id, s]));
+
+    // Combine
+    const finalData = optionalSubjects.map((os: any) => ({
+      ...os,
+      subjects: subjectMap.get(os.subject_id) || null
+    }));
+
+    return NextResponse.json({ data: finalData || [] });
   } catch (err) {
     console.error('Error in GET /api/student-optional-subjects:', err);
     return NextResponse.json(
@@ -82,28 +103,22 @@ export async function POST(request: Request) {
     const sessionMatch = cookieHeader.match(/sms_session=([^;]+)/);
     const token = sessionMatch?.[1];
 
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // Decode JWT to get user ID (simplified - in production use proper JWT decoding)
     let userId = 'admin';
-    try {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split('')
-          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-          .join('')
-      );
-      const decoded = JSON.parse(jsonPayload);
-      userId = decoded.id || 'admin';
-    } catch (e) {
-      console.log('Could not decode JWT, using default admin');
+    if (token) {
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split('')
+            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+        const decoded = JSON.parse(jsonPayload);
+        userId = decoded.id || 'admin';
+      } catch {
+        console.log('Could not decode JWT, using default admin');
+      }
     }
 
     const { data, error } = await supabaseAdmin
@@ -112,8 +127,7 @@ export async function POST(request: Request) {
         student_id,
         subject_id,
         assigned_by: userId
-      })
-      .select();
+      });
 
     if (error) {
       console.error('Error assigning optional subject:', error);
@@ -166,10 +180,10 @@ export async function DELETE(request: Request) {
       success: true,
       message: 'Optional subject removed successfully'
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error in DELETE /api/student-optional-subjects:', err);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: err.message || 'Internal server error' },
       { status: 500 }
     );
   }

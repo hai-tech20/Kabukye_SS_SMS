@@ -111,12 +111,11 @@ export default function TeacherSidebar({ sidebarOpen, setSidebarOpen }: TeacherS
               allowed = base;
             } else {
               const classId = teacher.class_teacher_class_id?.toString().toLowerCase().trim();
+              allowed = [...base, '/dashboard/teacher/class-results'];
               if (['s1', 's2', 's3', 's4'].includes(classId || '')) {
-                allowed = [...base, '/dashboard/teacher/optional-subjects'];
+                allowed = [...allowed, '/dashboard/teacher/optional-subjects'];
               } else if (['s5', 's6'].includes(classId || '')) {
-                allowed = [...base, '/dashboard/teacher/combinations'];
-              } else {
-                allowed = base;
+                allowed = [...allowed, '/dashboard/teacher/combinations'];
               }
             }
 
@@ -194,12 +193,11 @@ export default function TeacherSidebar({ sidebarOpen, setSidebarOpen }: TeacherS
               allowed = base;
             } else {
               const classId = teacher.class_teacher_class_id?.toString().toLowerCase().trim();
+              allowed = [...base, '/dashboard/teacher/class-results'];
               if (['s1', 's2', 's3', 's4'].includes(classId || '')) {
-                allowed = [...base, '/dashboard/teacher/optional-subjects'];
+                allowed = [...allowed, '/dashboard/teacher/optional-subjects'];
               } else if (['s5', 's6'].includes(classId || '')) {
-                allowed = [...base, '/dashboard/teacher/combinations'];
-              } else {
-                allowed = base;
+                allowed = [...allowed, '/dashboard/teacher/combinations'];
               }
             }
 

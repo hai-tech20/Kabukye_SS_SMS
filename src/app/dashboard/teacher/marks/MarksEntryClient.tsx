@@ -212,9 +212,8 @@ export default function MarksEntryClient({
       return;
     }
 
-    // Filter streams and subjects based on assignments for selected class
+    // Only show streams the teacher is assigned to for this class
     const relevantAssignments = assignments.filter(a => a.class_id === selectedClass);
-    
     const relevantStreamIds = [...new Set(relevantAssignments.map(a => a.stream_id))];
     const relevantSubjectIds = [...new Set(relevantAssignments.map(a => a.subject_id))];
     
@@ -226,22 +225,19 @@ export default function MarksEntryClient({
     setSelectedSubject('');
   }, [selectedClass, assignments, allStreams, allSubjects]);
 
-  // Fetch students and grades with deduplication
+  // Fetch students and grades with parallel fetching and better abort handling
   useEffect(() => {
     if (!selectedClass || !selectedStream || !selectedSubject) return;
-    
-    // Prevent concurrent fetches
-    if (isFetchingRef.current) return;
-    
-    // Cancel previous request
+
+    // Cancel previous request immediately
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    
-    abortControllerRef.current = new AbortController();
-    isFetchingRef.current = true;
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
     setLoading(true);
-    
+
     const fetchData = async () => {
       try {
         const params = new URLSearchParams();
@@ -251,58 +247,66 @@ export default function MarksEntryClient({
         params.append('term', selectedTerm);
         params.append('academic_year', selectedYear);
         params.append('t', Date.now().toString());
-        
-        // Fetch students
-        const studentsRes = await fetch(`/api/students?${params.toString()}`, {
-          signal: abortControllerRef.current?.signal,
-          cache: 'no-store'
-        });
+
+        // Fetch students and grades in parallel to make it faster!
+        const [studentsRes, gradesRes] = await Promise.all([
+          fetch(`/api/students?${params.toString()}`, {
+            signal: abortController.signal,
+            cache: 'no-store'
+          }),
+          fetch(`/api/grades?${params.toString()}`, {
+            signal: abortController.signal,
+            cache: 'no-store'
+          })
+        ]);
+
         if (!studentsRes.ok) throw new Error('Failed to fetch students');
-        const studentsData = await studentsRes.json();
-        
-        // Fetch grades
-        const gradesRes = await fetch(`/api/grades?${params.toString()}`, {
-          signal: abortControllerRef.current?.signal,
-          cache: 'no-store'
-        });
         if (!gradesRes.ok) throw new Error('Failed to fetch grades');
-        const gradesData = await gradesRes.json();
-        
+
+        const [studentsData, gradesData] = await Promise.all([
+          studentsRes.json(),
+          gradesRes.json()
+        ]);
+
         const studentsList = studentsData.data || [];
         const gradesList = gradesData.data || [];
-        
+
         // Initialize grades from existing data or empty
         const initialGrades: GradeEntry[] = studentsList.map((s: Student) => {
-          const existingGrade = gradesList.find((g: any) => g.student_id === s.id);
-          
+          const existingGrade = gradesList.find((g: any) => String(g.student_id) === String(s.id));
+
           // Extract paper scores from grade_papers array or from p1_score, p2_score, p3_score columns
           const paperScores: Record<number, { mot?: number; eot?: number }> = {};
-          
-          // First check grade_papers array
+
+          // First check grade_papers array and respect assessment_type (MOT vs EOT)
           if (existingGrade?.grade_papers && Array.isArray(existingGrade.grade_papers)) {
             for (const paper of existingGrade.grade_papers) {
               if (!paperScores[paper.paper_number]) {
                 paperScores[paper.paper_number] = {};
               }
-              paperScores[paper.paper_number].mot = paper.score;
+              const atype = (paper.assessment_type || '').toString().toUpperCase();
+              const scoreNum = paper.score !== undefined && paper.score !== null ? Number(paper.score) : undefined;
+              if (atype === 'EOT') {
+                paperScores[paper.paper_number].eot = scoreNum;
+              } else {
+                paperScores[paper.paper_number].mot = scoreNum;
+              }
             }
           }
-          
+
           const hasSinglePaper = paperCount === 1;
-          const motP1 = existingGrade?.p1_score ?? paperScores[1]?.mot;
-          const eotP1 = existingGrade?.p1_eot_score ?? paperScores[1]?.eot;
 
           return {
             student_id: s.id,
-            mot_p1: motP1 !== undefined ? motP1 : (hasSinglePaper ? existingGrade?.mot_score : undefined),
-            mot_p2: existingGrade?.p2_score ?? paperScores[2]?.mot ?? undefined,
-            mot_p3: existingGrade?.p3_score ?? paperScores[3]?.mot ?? undefined,
-            eot_p1: eotP1 !== undefined ? eotP1 : (hasSinglePaper ? existingGrade?.eot_score : undefined),
-            eot_p2: existingGrade?.p2_eot_score ?? paperScores[2]?.eot ?? undefined,
-            eot_p3: existingGrade?.p3_eot_score ?? paperScores[3]?.eot ?? undefined
+            mot_p1: paperScores[1]?.mot ?? (hasSinglePaper ? existingGrade?.mot_score : undefined),
+            mot_p2: paperScores[2]?.mot ?? undefined,
+            mot_p3: paperScores[3]?.mot ?? undefined,
+            eot_p1: paperScores[1]?.eot ?? (hasSinglePaper ? existingGrade?.eot_score : undefined),
+            eot_p2: paperScores[2]?.eot ?? undefined,
+            eot_p3: paperScores[3]?.eot ?? undefined
           };
         });
-        
+
         setStudents(studentsList);
         setGrades(initialGrades);
       } catch (err: any) {
@@ -311,15 +315,17 @@ export default function MarksEntryClient({
           setError(err.message);
         }
       } finally {
-        isFetchingRef.current = false;
-        setLoading(false);
+        // Only stop loading if this is the latest request
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
-    
+
     fetchData();
-    
+
     return () => {
-      abortControllerRef.current?.abort();
+      abortController.abort();
     };
   }, [selectedClass, selectedStream, selectedSubject, selectedTerm, selectedYear, selectedSet, reloadKey]);
 
@@ -390,20 +396,27 @@ export default function MarksEntryClient({
           ? Math.round(eotPapers.reduce((a, b) => a + b, 0) / eotPapers.length)
           : undefined;
 
-        return {
+        // Send only the fields that are actually present to avoid errors
+        const gradeData: any = {
           student_id: g.student_id,
           class_id: selectedClass,
           stream_id: selectedStream,
           subject_id: selectedSubject,
           term: selectedTerm,
-          academic_year: selectedYear,
-          mot_score: motScore,
-          eot_score: eotScore,
-          p1_score: g.mot_p1 ?? g.eot_p1,
-          p2_score: g.mot_p2 ?? g.eot_p2,
-          p3_score: g.mot_p3 ?? g.eot_p3
+          academic_year: selectedYear
         };
-      }).filter(g => g.mot_score !== undefined || g.eot_score !== undefined);
+        
+        if (motScore !== undefined) gradeData.mot_score = motScore;
+        if (eotScore !== undefined) gradeData.eot_score = eotScore;
+        if (g.mot_p1 !== undefined && g.mot_p1 !== null) gradeData.mot_p1 = g.mot_p1;
+        if (g.eot_p1 !== undefined && g.eot_p1 !== null) gradeData.eot_p1 = g.eot_p1;
+        if (g.mot_p2 !== undefined && g.mot_p2 !== null) gradeData.mot_p2 = g.mot_p2;
+        if (g.eot_p2 !== undefined && g.eot_p2 !== null) gradeData.eot_p2 = g.eot_p2;
+        if (g.mot_p3 !== undefined && g.mot_p3 !== null) gradeData.mot_p3 = g.mot_p3;
+        if (g.eot_p3 !== undefined && g.eot_p3 !== null) gradeData.eot_p3 = g.eot_p3;
+        
+        return gradeData;
+      }).filter(g => Object.keys(g).length > 6); // Ensure at least student_id, class_id, stream_id, subject_id, term, year and some score
 
       if (gradesData.length === 0) {
         alert('No grades to save. Please enter marks first.');
@@ -422,13 +435,78 @@ export default function MarksEntryClient({
       });
 
       if (!res.ok) {
-        const body = await res.json();
-        throw new Error(body?.error || 'Failed to save grades');
+        let errorText = `Failed to save grades (${res.status})`;
+        try {
+          const body = await res.json();
+          if (body?.error) {
+            errorText = body.error;
+          }
+        } catch (jsonErr) {
+          console.error('Failed to parse error response from grades API:', jsonErr);
+        }
+        throw new Error(errorText);
       }
-      
+
+      // After successful save, immediately refetch students and grades for this selection
+      // to ensure MOT/EOT rows persisted and are displayed (prevents perceived disappearance).
+      const params = new URLSearchParams();
+      params.append('class_id', selectedClass);
+      params.append('stream_id', selectedStream);
+      params.append('subject_id', selectedSubject);
+      params.append('term', selectedTerm);
+      params.append('academic_year', selectedYear);
+
+      try {
+        const [studentsRes, gradesRes] = await Promise.all([
+          fetch(`/api/students?${params.toString()}`, { cache: 'no-store' }),
+          fetch(`/api/grades?${params.toString()}`, { cache: 'no-store' })
+        ]);
+        if (studentsRes.ok && gradesRes.ok) {
+          const [studentsData, gradesDataResp] = await Promise.all([studentsRes.json(), gradesRes.json()]);
+          const studentsList = studentsData.data || [];
+          const gradesList = gradesDataResp.data || [];
+
+          // Rebuild local grades state consistent with initial loading logic
+          const refreshedGrades: GradeEntry[] = studentsList.map((s: Student) => {
+            const existingGrade = gradesList.find((g: any) => String(g.student_id) === String(s.id));
+            const paperScores: Record<number, { mot?: number; eot?: number }> = {};
+            if (existingGrade?.grade_papers && Array.isArray(existingGrade.grade_papers)) {
+              for (const paper of existingGrade.grade_papers) {
+                if (!paperScores[paper.paper_number]) paperScores[paper.paper_number] = {};
+                const atype = (paper.assessment_type || '').toString().toUpperCase();
+                const scoreNum = paper.score !== undefined && paper.score !== null ? Number(paper.score) : undefined;
+                if (atype === 'EOT') paperScores[paper.paper_number].eot = scoreNum;
+                else paperScores[paper.paper_number].mot = scoreNum;
+              }
+            }
+
+            const hasSinglePaper = paperCount === 1;
+            const motP1 = existingGrade?.p1_score ?? paperScores[1]?.mot;
+            const eotP1 = existingGrade?.p1_eot_score ?? paperScores[1]?.eot;
+
+            return {
+              student_id: s.id,
+              mot_p1: motP1 !== undefined ? motP1 : (hasSinglePaper ? existingGrade?.mot_score : undefined),
+              mot_p2: existingGrade?.p2_score ?? paperScores[2]?.mot ?? undefined,
+              mot_p3: existingGrade?.p3_score ?? paperScores[3]?.mot ?? undefined,
+              eot_p1: eotP1 !== undefined ? eotP1 : (hasSinglePaper ? existingGrade?.eot_score : undefined),
+              eot_p2: existingGrade?.p2_eot_score ?? paperScores[2]?.eot ?? undefined,
+              eot_p3: existingGrade?.p3_eot_score ?? paperScores[3]?.eot ?? undefined
+            };
+          });
+
+          setStudents(studentsList);
+          setGrades(refreshedGrades);
+        } else {
+          // fallback: trigger reloadKey so existing effect refetches
+          setReloadKey(k => k + 1);
+        }
+      } catch (refetchErr) {
+        console.error('Refetch after save failed:', refetchErr);
+        setReloadKey(k => k + 1);
+      }
+
       setHasEdits(false);
-      // Trigger a reload to fetch the latest saved marks (MOT/EOT)
-      setReloadKey(k => k + 1);
       alert('Grades saved successfully!');
     } catch (error: any) {
       console.error('Error saving grades:', error);

@@ -2,6 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { requireSession, assertStudentSelf } from '@/lib/auth-session';
 
+const getAlevelPointsFromGrade = (grade: string | null | undefined, subjectName?: string): number => {
+  if (!grade) return 0;
+  const g = grade.toUpperCase();
+  const lowerName = (subjectName || '').toLowerCase();
+  const isSubsidiary = lowerName.includes('general paper') || lowerName.includes('sub ict') || lowerName.includes('sub mathematics') || lowerName.includes('sub math');
+  switch (g) {
+    case 'D1': return isSubsidiary ? 1 : 6;
+    case 'D2': return isSubsidiary ? 1 : 5;
+    case 'C3': return isSubsidiary ? 1 : 4;
+    case 'C4': return isSubsidiary ? 1 : 4;
+    case 'C5': return isSubsidiary ? 1 : 3;
+    case 'C6': return isSubsidiary ? 1 : 3;
+    case 'P7': return isSubsidiary ? 0 : 2;
+    case 'P8': return isSubsidiary ? 0 : 1;
+    case 'F9': return 0;
+    case 'A': return 6;
+    case 'B': return 5;
+    case 'C': return 4;
+    case 'D': return 3;
+    case 'E': return 2;
+    case 'O': return 1;
+    default: return 0;
+  }
+};
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireSession();
@@ -117,7 +142,7 @@ export async function GET(request: NextRequest) {
           headTeacherComment = 'Requires support';
         }
       } else {
-        const totalPoints = student.total_uace_points ?? 0;
+        const totalPoints = student.total_uace_points ?? (grades || []).reduce((sum: number, row: any) => sum + (row.uace_points ?? row.points ?? getAlevelPointsFromGrade(row.grade, row.subjects?.name || row.subject)), 0);
 
         if (totalPoints >= 16) {
           classTeacherComment = 'Very good performance';
