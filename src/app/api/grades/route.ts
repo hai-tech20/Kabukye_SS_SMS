@@ -461,7 +461,7 @@ export async function POST(request: NextRequest) {
         const { data: paperInsertData, error: paperError } = await withRetry(async () =>
           await supabaseAdmin
             .from('grade_papers')
-            .upsert(paperData, { onConflict: ['grade_id', 'paper_number', 'assessment_type'] })
+            .upsert(paperData, { onConflict: 'grade_id,paper_number,assessment_type' })
             .select()
         );
 

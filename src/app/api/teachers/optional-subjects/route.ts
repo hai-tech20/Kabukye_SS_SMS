@@ -264,8 +264,12 @@ export async function DELETE(request: Request) {
 
       const teacherClassId = teacherData.class_teacher_class_id?.toString().toLowerCase().trim();
       const teacherStreamId = teacherData.class_teacher_stream_id?.toString().toLowerCase().trim();
-      const studentClassId = optionalAssignment.students?.class_id?.toString().toLowerCase().trim();
-      const studentStreamId = optionalAssignment.students?.stream_id?.toString().toLowerCase().trim();
+      const studentClassId = Array.isArray((optionalAssignment as any).students) 
+        ? (optionalAssignment as any).students[0]?.class_id?.toString().toLowerCase().trim() 
+        : (optionalAssignment as any).students?.class_id?.toString().toLowerCase().trim();
+      const studentStreamId = Array.isArray((optionalAssignment as any).students) 
+        ? (optionalAssignment as any).students[0]?.stream_id?.toString().toLowerCase().trim() 
+        : (optionalAssignment as any).students?.stream_id?.toString().toLowerCase().trim();
 
       if (!teacherClassId || !teacherStreamId || teacherClassId !== studentClassId || teacherStreamId !== studentStreamId) {
         return NextResponse.json(

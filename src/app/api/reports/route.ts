@@ -270,15 +270,15 @@ export async function GET(request: NextRequest) {
         } else if (g.grade_papers && Array.isArray(g.grade_papers) && g.grade_papers.length > 0) {
           // Fallback: if no explicit MOT/EOT distinction, treat all papers as MOT for now
           const allScores = g.grade_papers
-            .map(p => p.score !== null && p.score !== undefined ? Number(p.score) : undefined)
-            .filter((value): value is number => value !== undefined && value !== null);
+            .map((p: any) => p.score !== null && p.score !== undefined ? Number(p.score) : undefined)
+            .filter((value: number | undefined): value is number => value !== undefined && value !== null);
           if (allScores.length > 0) {
             // Compute average as overall finalScore (used as fallback)
-            finalScore = Math.round(allScores.reduce((sum, value) => sum + value, 0) / allScores.length);
+            finalScore = Math.round(allScores.reduce((sum: number, value: number) => sum + value, 0) / allScores.length);
             motScore = finalScore;
 
             // Additionally, try to derive per-paper UNEB codes and resolve A-level grade
-            const paperCodes = allScores.map(s => scoreToUnebCode(s));
+            const paperCodes = allScores.map((s: number) => scoreToUnebCode(s));
             const paperCount = g.subjects?.paper_count ?? allScores.length;
             const resolvedGrade = resolveAlevelSubjectGrade(paperCodes, paperCount);
             gradeLabel = resolvedGrade;

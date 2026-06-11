@@ -200,9 +200,9 @@ export default function ClassResultsPage() {
       });
       setGrades(transformedGrades);
 
-      const gradeSubjectIds = [...new Set(transformedGrades.map((g: any) => g.subject_id))];
+      const gradeSubjectIds = [...new Set(transformedGrades.map((g: any) => g.subject_id as string))];
       const existingSubjectIds = subjects.map(s => s.id);
-      const missingSubjectIds = gradeSubjectIds.filter(id => !existingSubjectIds.includes(id));
+      const missingSubjectIds = gradeSubjectIds.filter(id => !existingSubjectIds.includes(id as string));
 
       if (missingSubjectIds.length > 0) {
         const allSubjectsRes = await fetch('/api/subjects');

@@ -49,7 +49,7 @@ interface ReportCardProps {
   totalStudentsInClass?: number;
   totalStudentsInStream?: number;
   optionalSubjects?: Array<{ id: string; name: string }>;
-  assignedSubjects?: Array<{ id: string; subject_id?: string; id: string; name: string; subject_type: string }>;
+  assignedSubjects?: Array<{ id: string; subject_id?: string; name: string; subject_type: string }>;
   classTeacherComment?: string;
   headTeacherComment?: string;
 }
@@ -626,7 +626,7 @@ const ReportCardS5S6: React.FC<ReportCardS5S6Props> = (props) => {
 
   const subjectRows = subjectsToShow.length > 0
     ? subjectsToShow.map((subject) => {
-        const subjectId = subject.subject_id || subject.id;
+        const subjectId = (subject as any).subject_id || subject.id;
         let gradeMatch = findGrade(subject.name, subjectId);
         if (!gradeMatch && subjectId) {
           gradeMatch = grades.find((g) => g.subject_id === subjectId);
@@ -636,7 +636,7 @@ const ReportCardS5S6: React.FC<ReportCardS5S6Props> = (props) => {
         }
 
         return {
-          name: subject.name || subject.subject_id || 'Unknown Subject',
+          name: subject.name || (subject as any).subject_id || 'Unknown Subject',
           grade: gradeMatch,
           type: subject.subject_type,
           subject_id: subjectId
