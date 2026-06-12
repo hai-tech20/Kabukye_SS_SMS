@@ -10,10 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "dev:sms": "next dev -p 3000",
-    "dev:website": "cd \"kabukyeSS website\" && npm start",
-    "dev:all": "concurrently \"npm run dev\" \"npm run dev:website\"",
-    "postinstall": "cd \"kabukyeSS website\" && npm install"
+    "dev:sms": "next dev -p 3000"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",
