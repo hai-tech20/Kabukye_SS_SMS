@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import TeacherSidebar from '@/components/sidebar/TeacherSidebar';
+import { getCurrentTerm } from '@/lib/academic-calendar';
 
 interface Student {
   id: string;
@@ -37,8 +38,18 @@ function GradesViewPage() {
   const [selectedClass, setSelectedClass] = useState(searchParams.get('class') || '');
   const [selectedStream, setSelectedStream] = useState(searchParams.get('stream') || '');
   const [selectedSubject, setSelectedSubject] = useState(searchParams.get('subject') || '');
-  const [selectedTerm, setSelectedTerm] = useState('Term 1');
-  const [selectedYear, setSelectedYear] = useState('2026');
+  
+  // Get current term and year for defaults
+  const currentTermData = getCurrentTerm();
+  const getTermLabel = (termName: string) => {
+    if (termName.includes('I') && !termName.includes('II')) return 'Term 1';
+    if (termName.includes('II')) return 'Term 2';
+    if (termName.includes('III')) return 'Term 3';
+    return 'Term 1';
+  };
+  
+  const [selectedTerm, setSelectedTerm] = useState(getTermLabel(currentTermData.name));
+  const [selectedYear, setSelectedYear] = useState(currentTermData.academicYear.toString());
   const [selectedSet, setSelectedSet] = useState<'MOT' | 'EOT' | 'ALL'>('ALL');
   const [isPublished, setIsPublished] = useState(false);
   const [editingMode, setEditingMode] = useState(false);
@@ -504,22 +515,22 @@ function GradesViewPage() {
           {/* Grades Table */}
           <div className="bg-white shadow-md rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
                 <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <tr className="border-b border-gray-200">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
                       Student Name
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
                       MOT
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
                       EOT
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
                       Final Score
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
                       Grade
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -534,11 +545,11 @@ function GradesViewPage() {
                     const currentGrade = editingMode ? editedGrade : grade;
                     
                     return (
-                      <tr key={student.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <tr key={student.id} className="border-b border-gray-200">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
                           {student.full_name}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
                           {editingMode ? (
                             <input
                               type="number"
@@ -553,7 +564,7 @@ function GradesViewPage() {
                             <span className="text-sm text-gray-900">{currentGrade?.mot || '-'}</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
                           {editingMode ? (
                             <input
                               type="number"
@@ -568,10 +579,10 @@ function GradesViewPage() {
                             <span className="text-sm text-gray-900">{currentGrade?.eot || '-'}</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
                           {currentGrade?.final_score || '-'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getGradeColor(currentGrade?.grade || '')}`}>
                             {currentGrade?.grade || '-'}
                           </span>

@@ -1,9 +1,21 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import Image from 'next/image';
 import { getCurrentTerm } from '@/lib/academic-calendar';
+import { withRetry } from '@/lib/retry';
 import AdminSidebar from '@/components/sidebar/AdminSidebar';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
+// Helper function for fetch with retry
+const fetchWithRetry = async (url: string, options?: RequestInit) => {
+  return await withRetry(async () => {
+    const response = await fetch(url, options);
+    return response;
+  }, 3, 1000);
+};
 
 interface Student {
   id: string;
@@ -742,16 +754,26 @@ const ReportCard: React.FC<ReportCardProps> = (props) => {
   
   const { optionalSubjects, assignedSubjects } = props;
   
+  let content;
   switch (classLevel) {
     case 'S1-S2':
-      return <ReportCardS1S2 {...props} optionalSubjects={optionalSubjects} />;
+      content = <ReportCardS1S2 {...props} optionalSubjects={optionalSubjects} />;
+      break;
     case 'S3-S4':
-      return <ReportCardS3S4 {...props} optionalSubjects={optionalSubjects} />;
+      content = <ReportCardS3S4 {...props} optionalSubjects={optionalSubjects} />;
+      break;
     case 'S5-S6':
-      return <ReportCardS5S6 {...props} assignedSubjects={assignedSubjects} />;
+      content = <ReportCardS5S6 {...props} assignedSubjects={assignedSubjects} />;
+      break;
     default:
-      return <ReportCardS1S2 {...props} optionalSubjects={optionalSubjects} />;
+      content = <ReportCardS1S2 {...props} optionalSubjects={optionalSubjects} />;
   }
+
+  return (
+    <div className="w-full max-w-[210mm] mx-auto bg-white p-[5mm]">
+      {content}
+    </div>
+  );
 };
 
 export default function ReportsPage() {
@@ -759,8 +781,21 @@ export default function ReportsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedTerm, setSelectedTerm] = useState('1');
-  const [selectedYear, setSelectedYear] = useState(getCurrentTerm().academicYear.toString());
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [pdfCurrentStudentIndex, setPdfCurrentStudentIndex] = useState(-1); // For one-at-a-time rendering
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Get current term and year for defaults
+  const currentTermData = getCurrentTerm();
+  const getTermNumber = (termName: string) => {
+    if (termName.includes('I') && !termName.includes('II')) return '1';
+    if (termName.includes('II')) return '2';
+    if (termName.includes('III')) return '3';
+    return '1';
+  };
+  
+  const [selectedTerm, setSelectedTerm] = useState(getTermNumber(currentTermData.name));
+  const [selectedYear, setSelectedYear] = useState(currentTermData.academicYear.toString());
   const [selectedClass, setSelectedClass] = useState('ALL');
   const [selectedStream, setSelectedStream] = useState('ALL');
   const [isPublished, setIsPublished] = useState(false);
@@ -1187,69 +1222,164 @@ export default function ReportsPage() {
     setPreviewStudent(null);
   };
 
-  return (
-    <div className="h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex overflow-hidden">
-      <style>{`
-        @media print {
-          .no-print {
-            display: none !important;
+  const generatePDF = async () => {
+    if (loading) {
+      alert('Please wait for data to load first!');
+      return;
+    }
+
+    if (students.length === 0) {
+      alert('No students to generate PDF for!');
+      return;
+    }
+
+    if (!confirm(`Generate PDF for ${students.length} student(s)? This may take a while.`)) {
+      return;
+    }
+
+    setPdfGenerating(true);
+
+    try {
+      console.log('Starting PDF generation...');
+
+      // Create PDF
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+
+      // Process each student one at a time
+      for (let i = 0; i < students.length; i++) {
+        console.log(`Processing student ${i + 1}/${students.length}`);
+        
+        // Render current student with flushSync to force immediate update
+        flushSync(() => {
+          setPdfCurrentStudentIndex(i);
+        });
+        
+        // Very short wait for React to render
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Get the report card element
+        const reportCardElement = pdfContainerRef.current?.querySelector('.pdf-report-card') as HTMLElement;
+        if (!reportCardElement) continue;
+        
+        // Capture immediately without waiting for images (faster!)
+        const canvas = await html2canvas(reportCardElement, {
+          scale: 1.2, // Even lower scale for speed
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          allowTaint: true,
+          imageTimeout: 5000, // Shorter timeout
+          ignoreElements: (element) => {
+            return element.tagName === 'SCRIPT'; // Ignore scripts
           }
-          body {
-            margin: 0;
-            padding: 0;
-            background: white;
-          }
-          .bg-white {
-            background-color: white !important;
-          }
-          .fixed {
-            position: static !important;
-          }
-          .bg-black {
-            background-color: white !important;
-          }
-          .inset-0 {
-            position: static !important;
-          }
-          @page {
-            margin: 5mm;
-            size: A4 portrait;
-          }
-          body {
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-          .report-card-print {
-            width: 100% !important;
-            max-width: 100% !important;
-            padding: 3mm !important;
-            border: none !important;
-            box-shadow: none !important;
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-            font-size: 9px !important;
-            line-height: 1.15 !important;
-          }
-          .report-card-print * {
-            font-size: inherit !important;
-          }
-          .report-card-print .rc-table th,
-          .report-card-print .rc-table td {
-            padding: 1px 2px !important;
-            font-size: 8px !important;
-          }
-          .report-card-print img {
-            max-height: 68px !important;
-            width: auto !important;
-          }
+        });
+        
+        const imgData = canvas.toDataURL('image/jpeg', 0.9); // JPEG is way faster than PNG!
+        
+        // Add new page if not first
+        if (i > 0) {
+          pdf.addPage();
         }
+        
+        const imgHeight = (canvas.height * pageWidth) / canvas.width;
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, imgHeight);
+      }
+
+      console.log('PDF generated, downloading...');
+      const fileName = `Report_Cards_${selectedYear}_Term_${selectedTerm}.pdf`;
+      pdf.save(fileName);
+      alert('PDF generated and downloaded successfully!');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF! Check console for details.');
+    } finally {
+      flushSync(() => {
+        setPdfCurrentStudentIndex(-1);
+      });
+      setPdfGenerating(false);
+    }
+  };
+
+  return (
+    <div className="h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex overflow-hidden relative">
+      {/* Print-only content (always at top level) */}
+      {printAllReports && (
+        <div className="print-only absolute top-0 left-0 w-full bg-white p-0">
+          {students.map((student) => {
+            const classLevel = getClassLevel(student.class);
+            let optionalSubjectsForStudent: Array<{ id: string; name: string }> = [];
+            let assignedSubjectsForStudent: Array<{ id: string; subject_id?: string; name: string; subject_type: string }> = [];
+            
+            if (classLevel === 'S1-S2' || classLevel === 'S3-S4') {
+              optionalSubjectsForStudent = previewOptionalSubjects;
+            } else {
+              assignedSubjectsForStudent = previewAssignedSubjects;
+            }
+
+            return (
+              <div key={student.id}>
+                <ReportCard
+                  student={student}
+                  grades={grades.filter(g => g.student_id === student.id)}
+                  term={selectedTerm}
+                  year={selectedYear}
+                  classTeacher={classTeachers[`${student.class}-${student.stream}`] || 'Not Assigned'}
+                  headTeacher="Mr. ISABIRYE SALEH"
+                  classTeacherComment={(student as any)?.auto_class_teacher_comment || ''}
+                  headTeacherComment={(student as any)?.auto_head_teacher_comment || ''}
+                  academicTerm={previewAcademicTerm || undefined}
+                  optionalSubjects={optionalSubjectsForStudent}
+                  assignedSubjects={assignedSubjectsForStudent}
+                  positionInClass={(student as any)?._positionInClass}
+                  positionInStream={(student as any)?._positionInStream}
+                  totalStudentsInClass={(window as any).__report_positions?.totals?.byClass?.[student.class]}
+                  totalStudentsInStream={(window as any).__report_positions?.totals?.byStream?.[`${student.class}-${student.stream}`]}
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {showPreview && previewStudent && (
+        <div className="print-only absolute top-0 left-0 w-full bg-white p-0">
+          <div>
+            <ReportCard
+              student={previewStudent}
+              grades={grades.filter(g => g.student_id === previewStudent.id)}
+              term={selectedTerm}
+              year={selectedYear}
+              classTeacher={classTeachers[`${previewStudent.class}-${previewStudent.stream}`] || 'Not Assigned'}
+              headTeacher="Mr. ISABIRYE SALEH"
+              classTeacherComment={previewComments?.class_teacher_comment || (previewStudent as any)?.auto_class_teacher_comment || ''}
+              headTeacherComment={previewComments?.head_teacher_comment || (previewStudent as any)?.auto_head_teacher_comment || ''}
+              academicTerm={previewAcademicTerm || undefined}
+              optionalSubjects={previewOptionalSubjects}
+              assignedSubjects={previewAssignedSubjects}
+              positionInClass={(previewStudent as any)?._positionInClass || (window as any).__report_positions?.classPositions?.[previewStudent.id]}
+              positionInStream={(previewStudent as any)?._positionInStream || (window as any).__report_positions?.streamPositions?.[previewStudent.id]}
+              totalStudentsInClass={(window as any).__report_positions?.totals?.byClass?.[previewStudent.class]}
+              totalStudentsInStream={(window as any).__report_positions?.totals?.byStream?.[`${previewStudent.class}-${previewStudent.stream}`]}
+            />
+          </div>
+        </div>
+      )}
+      {/* Normal screen content */}
+      <style>{`
         @media screen {
           .print-only {
-            display: none;
+            display: none !important;
           }
         }
       `}</style>
-      <AdminSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+      <div className="no-print">
+        <AdminSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+      </div>
 
       <div className={`flex-1 h-full overflow-y-auto transition-all duration-300 pt-16 lg:pt-0 ${
         sidebarOpen ? 'lg:ml-64' : 'lg:ml-20'
@@ -1350,11 +1480,35 @@ export default function ReportsPage() {
                 <button
                   onClick={handlePrintAll}
                   className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-md font-bold"
+                  disabled={pdfGenerating}
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                   </svg>
                   Print All Reports
+                </button>
+                <button
+                  onClick={generatePDF}
+                  className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center shadow-md font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={pdfGenerating || loading}
+                >
+                  {pdfGenerating ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      {pdfCurrentStudentIndex >= 0 
+                        ? `Generating PDF (${pdfCurrentStudentIndex + 1}/${students.length})` 
+                        : 'Generating PDF...'}
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download PDF
+                    </>
+                  )}
                 </button>
                 {selectedClass !== 'ALL' && (
                   <button
@@ -1438,46 +1592,8 @@ export default function ReportsPage() {
             </div>
           )}
 
-          {/* Print All Reports Section */}
-          {printAllReports && (
-            <div className="print-only">
-              {students.map((student) => {
-                const classLevel = getClassLevel(student.class);
-                let optionalSubjectsForStudent: Array<{ id: string; name: string }> = [];
-                let assignedSubjectsForStudent: Array<{ id: string; subject_id?: string; name: string; subject_type: string }> = [];
-                
-                if (classLevel === 'S1-S2' || classLevel === 'S3-S4') {
-                  optionalSubjectsForStudent = previewOptionalSubjects;
-                } else {
-                  assignedSubjectsForStudent = previewAssignedSubjects;
-                }
-
-                return (
-                  <ReportCard
-                    key={student.id}
-                    student={student}
-                    grades={grades.filter(g => g.student_id === student.id)}
-                    term={selectedTerm}
-                    year={selectedYear}
-                    classTeacher={classTeachers[`${student.class}-${student.stream}`] || 'Not Assigned'}
-                    headTeacher="Mr. ISABIRYE SALEH"
-                    classTeacherComment={(student as any)?.auto_class_teacher_comment || ''}
-                    headTeacherComment={(student as any)?.auto_head_teacher_comment || ''}
-                    academicTerm={previewAcademicTerm || undefined}
-                    optionalSubjects={optionalSubjectsForStudent}
-                    assignedSubjects={assignedSubjectsForStudent}
-                    positionInClass={(student as any)?._positionInClass}
-                    positionInStream={(student as any)?._positionInStream}
-                    totalStudentsInClass={(window as any).__report_positions?.totals?.byClass?.[student.class]}
-                    totalStudentsInStream={(window as any).__report_positions?.totals?.byStream?.[`${student.class}-${student.stream}`]}
-                  />
-                );
-              })}
-            </div>
-          )}
-
           {showPreview && previewStudent && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 no-print">
               <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
                 <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 border-b border-gray-200 p-4 flex justify-between items-center no-print">
                   <h3 className="text-lg font-bold text-white">Report Card - {previewStudent.full_name}</h3>
@@ -1521,6 +1637,65 @@ export default function ReportsPage() {
               </div>
             </div>
           )}
+
+          {/* Hidden container for PDF generation - completely separate styling */}
+          <div 
+            ref={pdfContainerRef} 
+            className="fixed"
+            style={{
+              left: '-9999px',
+              top: '0',
+              width: '210mm',
+              backgroundColor: 'white',
+              zIndex: -1,
+              lineHeight: 'normal',
+              fontSize: '16px',
+              overflow: 'visible'
+            }}
+          >
+            {pdfCurrentStudentIndex >= 0 && students[pdfCurrentStudentIndex] && (() => {
+              const student = students[pdfCurrentStudentIndex];
+              const classLevel = getClassLevel(student.class);
+              let optionalSubjectsForStudent: Array<{ id: string; name: string }> = [];
+              let assignedSubjectsForStudent: Array<{ id: string; subject_id?: string; name: string; subject_type: string }> = [];
+              
+              if (classLevel === 'S1-S2' || classLevel === 'S3-S4') {
+                optionalSubjectsForStudent = previewOptionalSubjects;
+              } else {
+                assignedSubjectsForStudent = previewAssignedSubjects;
+              }
+
+              return (
+                <div 
+                  className="pdf-report-card"
+                  style={{
+                    width: '210mm',
+                    padding: '0',
+                    margin: '0',
+                    pageBreakInside: 'avoid'
+                  }}
+                >
+                  <ReportCard
+                    student={student}
+                    grades={grades.filter(g => g.student_id === student.id)}
+                    term={selectedTerm}
+                    year={selectedYear}
+                    classTeacher={classTeachers[`${student.class}-${student.stream}`] || 'Not Assigned'}
+                    headTeacher="Mr. ISABIRYE SALEH"
+                    classTeacherComment={(student as any)?.auto_class_teacher_comment || ''}
+                    headTeacherComment={(student as any)?.auto_head_teacher_comment || ''}
+                    academicTerm={previewAcademicTerm || undefined}
+                    optionalSubjects={optionalSubjectsForStudent}
+                    assignedSubjects={assignedSubjectsForStudent}
+                    positionInClass={(student as any)?._positionInClass}
+                    positionInStream={(student as any)?._positionInStream}
+                    totalStudentsInClass={(window as any).__report_positions?.totals?.byClass?.[student.class]}
+                    totalStudentsInStream={(window as any).__report_positions?.totals?.byStream?.[`${student.class}-${student.stream}`]}
+                  />
+                </div>
+              );
+            })()}
+          </div>
         </div>
       </div>
     </div>

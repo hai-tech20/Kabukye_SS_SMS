@@ -31,3 +31,63 @@ textarea::placeholder {
   color: #6b7280 !important;
   opacity: 1;
 }
+
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    font-size: 12pt !important;
+    overflow: visible !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 1cm;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Make each report card take a full page */
+  .print-only > div {
+    page-break-before: always !important;
+    break-before: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* First report card doesn't need a page break before */
+  .print-only > div:first-child {
+    page-break-before: auto !important;
+    break-before: auto !important;
+  }
+
+  /* Only hide specific non-print elements, not entire page */
+  aside,
+  nav,
+  header,
+  footer,
+  button,
+  select,
+  input,
+  .fixed.z-50.bg-black.bg-opacity-50 {
+    display: none !important;
+  }
+}

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import TeacherSidebar from '@/components/sidebar/TeacherSidebar';
+import { getCurrentTerm } from '@/lib/academic-calendar';
 
 interface Student {
   id: string;
@@ -99,8 +100,18 @@ export default function MarksEntryClient({
   const [selectedStream, setSelectedStream] = useState(searchParams.get('stream_id') || '');
   const [selectedSubject, setSelectedSubject] = useState(searchParams.get('subject_id') || '');
   const [selectedSet, setSelectedSet] = useState<'MOT' | 'EOT'>('MOT');
-  const [selectedTerm, setSelectedTerm] = useState('1');
-  const [selectedYear, setSelectedYear] = useState('2026');
+  
+  // Get current term and year for defaults
+  const currentTermData = getCurrentTerm();
+  const getTermNumber = (termName: string) => {
+    if (termName.includes('I') && !termName.includes('II')) return '1';
+    if (termName.includes('II')) return '2';
+    if (termName.includes('III')) return '3';
+    return '1';
+  };
+  
+  const [selectedTerm, setSelectedTerm] = useState(getTermNumber(currentTermData.name));
+  const [selectedYear, setSelectedYear] = useState(currentTermData.academicYear.toString());
   const [searchTerm, setSearchTerm] = useState('');
 
   // Reset edits when filters change
@@ -668,13 +679,13 @@ export default function MarksEntryClient({
             </div>
           ) : filteredStudents.length > 0 ? (
             <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
                 <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P1</th>
+                  <tr className="border-b border-gray-200">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">Student</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">P1</th>
                     {paperCount >= 2 && (
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P2</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">P2</th>
                     )}
                     {paperCount >= 3 && (
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P3</th>
@@ -687,12 +698,12 @@ export default function MarksEntryClient({
                     const prefix = selectedSet === 'MOT' ? 'mot' : 'eot';
                     
                     return (
-                      <tr key={student.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                      <tr key={student.id} className="border-b border-gray-200">
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
                           <div className="text-sm font-medium text-gray-900">{student.full_name}</div>
                           <div className="text-sm text-gray-500">{student.schoolpay_code}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
                           <input
                             type="number"
                             min="0"
@@ -703,7 +714,7 @@ export default function MarksEntryClient({
                           />
                         </td>
                         {paperCount >= 2 && (
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
                             <input
                               type="number"
                               min="0"

@@ -33,6 +33,12 @@ interface Mark {
   p1_score?: number | null;
   p2_score?: number | null;
   p3_score?: number | null;
+  mot_p1?: number | null;
+  mot_p2?: number | null;
+  mot_p3?: number | null;
+  eot_p1?: number | null;
+  eot_p2?: number | null;
+  eot_p3?: number | null;
   subjects: {
     name: string;
     paper_count: number;
@@ -46,9 +52,26 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'results' | 'reports'>('overview');
 
+  // Get current term and year for defaults
+  const currentTermData = getCurrentTerm();
+  const getTermNumber = (termName: string) => {
+    if (termName.includes('I') && !termName.includes('II')) return '1';
+    if (termName.includes('II')) return '2';
+    if (termName.includes('III')) return '3';
+    return '1';
+  };
+  
+  const [selectedTerm, setSelectedTerm] = useState(getTermNumber(currentTermData.name));
+  const [selectedYear, setSelectedYear] = useState(currentTermData.academicYear.toString());
+
   useEffect(() => {
     fetchStudentData();
   }, []);
+
+  // Fetch data whenever term or year changes
+  useEffect(() => {
+    fetchMarksAndReports();
+  }, [selectedTerm, selectedYear]);
 
   const fetchStudentData = async () => {
     try {
@@ -67,28 +90,46 @@ export default function StudentDashboard() {
         setStudent(data);
       }
 
-      // Get current term/year
-      const currentTerm = getCurrentTerm();
-      const termMap: { [key: string]: string } = { 'Term I': '1', 'Term II': '2', 'Term III': '3' };
-      const termNumber = termMap[currentTerm.name] || '1';
+      // Initial fetch with current term/year
+      await fetchMarksAndReportsInternal(session.id);
+    } catch (error) {
+      console.error('Error fetching student data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      // Get report cards
-      const reportsRes = await fetch(`/api/reports/published?student_id=${session.id}`);
+  const fetchMarksAndReports = async () => {
+    try {
+      const sessionRes = await fetch('/api/auth/me');
+      if (!sessionRes.ok) {
+        window.location.href = '/login/student';
+        return;
+      }
+      const session = await sessionRes.json();
+      await fetchMarksAndReportsInternal(session.id);
+    } catch (error) {
+      console.error('Error fetching marks/reports:', error);
+    }
+  };
+
+  const fetchMarksAndReportsInternal = async (studentId: string) => {
+    try {
+      // Get report cards - filter by selected year and term? Wait, let's see what the reports API accepts!
+      const reportsRes = await fetch(`/api/reports/published?student_id=${studentId}`);
       if (reportsRes.ok) {
         const { data } = await reportsRes.json();
         setReportCards(data || []);
       }
 
-      // Get real-time marks - Aligned with teacher class results logic
-      const marksRes = await fetch(`/api/grades?student_id=${session.id}&term=${termNumber}&year=${currentTerm.academicYear}`);
+      // Get real-time marks
+      const marksRes = await fetch(`/api/grades?student_id=${studentId}&term=${selectedTerm}&year=${selectedYear}`);
       if (marksRes.ok) {
         const { data } = await marksRes.json();
         setMarks(data || []);
       }
     } catch (error) {
-      console.error('Error fetching student data:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error in fetchMarksAndReportsInternal:', error);
     }
   };
 
@@ -223,118 +264,194 @@ export default function StudentDashboard() {
         )}
 
         {activeTab === 'results' && (
-          <div className="bg-white rounded-lg shadow-md overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">Real-time Marks Review</h2>
-              <p className="text-gray-600 text-sm mt-1">Review your scores as they are saved by your teachers. These marks are read-only.</p>
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Filters */}
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-wrap gap-4 items-center">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Term</label>
+                <select
+                  value={selectedTerm}
+                  onChange={(e) => setSelectedTerm(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="1">Term 1</option>
+                  <option value="2">Term 2</option>
+                  <option value="3">Term 3</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                  <option value="2028">2028</option>
+                  <option value="2029">2029</option>
+                  <option value="2030">2030</option>
+                </select>
+              </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subject</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">P1</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">P2</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">P3</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase text-center">BOT</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase text-center">MOT</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase text-center">EOT</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase text-center font-bold">Total</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Term / Year</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {marks.length > 0 ? (
-                    marks.map((mark) => (
-                      <tr key={mark.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                            {mark.subjects?.name || `Subject ID: ${mark.subject_id}`}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{mark.p1_score ?? '-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{mark.p2_score ?? '-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{mark.p3_score ?? '-'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600">
-                          {mark.bot_score ?? '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600">
-                          {mark.mot_score ?? '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600">
-                          {mark.eot_score ?? '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className={`text-sm font-bold ${mark.final_score !== null && mark.final_score !== undefined ? 'text-blue-900' : 'text-gray-400'}`}>
-                            {mark.final_score ?? '-'}%
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          T{mark.term}, {mark.academic_year}
+
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">Real-time Marks Review</h2>
+                <p className="text-gray-600 text-sm mt-1">Review your scores as they are saved by your teachers. These marks are read-only.</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr className="border-b border-gray-200">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200" rowSpan={2}>Subject</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200" rowSpan={2} style={{textAlign: 'center'}}>BOT</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200" colSpan={3} style={{textAlign: 'center'}}>MOT</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200" colSpan={3} style={{textAlign: 'center'}}>EOT</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase text-center font-bold border-r border-gray-200" rowSpan={2}>Final Score</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" rowSpan={2}>Term / Year</th>
+                    </tr>
+                    <tr className="border-b border-gray-200">
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-r border-gray-200">P1</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-r border-gray-200">P2</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-r border-gray-200">P3</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-r border-gray-200">P1</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-r border-gray-200">P2</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">P3</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {marks.length > 0 ? (
+                      marks.map((mark) => (
+                        <tr key={mark.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                            <div className="text-sm font-medium text-gray-900">
+                              {mark.subjects?.name || `Subject ID: ${mark.subject_id}`}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">
+                            {mark.bot_score ?? '-'}
+                          </td>
+                          <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.mot_p1 ?? '-'}</td>
+                          <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.mot_p2 ?? '-'}</td>
+                          <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.mot_p3 ?? '-'}</td>
+                          <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.eot_p1 ?? '-'}</td>
+                          <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.eot_p2 ?? '-'}</td>
+                          <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.eot_p3 ?? '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center border-r border-gray-200">
+                            <span className={`text-sm font-bold ${mark.final_score !== null && mark.final_score !== undefined ? 'text-blue-900' : 'text-gray-400'}`}>
+                              {mark.final_score ?? '-'}%
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            T{mark.term}, {mark.academic_year}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
+                          No marks have been entered for you yet.
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                        No marks have been entered for you yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
 
         {activeTab === 'reports' && (
-          <div className="bg-white rounded-lg shadow-md overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">My Report Cards</h2>
-              <p className="text-gray-600 text-sm mt-1">View and download your official academic performance reports</p>
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Filters */}
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-wrap gap-4 items-center">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Term</label>
+                <select
+                  value={selectedTerm}
+                  onChange={(e) => setSelectedTerm(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="1">Term 1</option>
+                  <option value="2">Term 2</option>
+                  <option value="3">Term 3</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                  <option value="2028">2028</option>
+                  <option value="2029">2029</option>
+                  <option value="2030">2030</option>
+                </select>
+              </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Academic Year</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Term</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {reportCards.length > 0 ? (
-                    reportCards.map((report) => (
-                      <tr key={report.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{report.academic_year}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Term {report.term}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                            Published
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <a 
-                            href={report.file_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-900 font-bold"
-                          >
-                            View Report
-                          </a>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
-                        No report cards available yet.
-                      </td>
+
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">My Report Cards</h2>
+                <p className="text-gray-600 text-sm mt-1">View and download your official academic performance reports</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr className="border-b border-gray-200">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200">Academic Year</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200">Term</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200">Status</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Action</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {/* Filter report cards by selected term and year */}
+                    {(() => {
+                      const filteredReports = reportCards.filter(r => 
+                        r.term === selectedTerm && r.academic_year === selectedYear
+                      );
+                      if (filteredReports.length > 0) {
+                        return filteredReports.map((report) => (
+                          <tr key={report.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">{report.academic_year}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">Term {report.term}</td>
+                            <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                              <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                Published
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              <a 
+                                href={report.file_url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-900 font-bold"
+                              >
+                                View Report
+                              </a>
+                            </td>
+                          </tr>
+                        ));
+                      } else {
+                        return (
+                          <tr>
+                            <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
+                              No report cards available for selected term and year.
+                            </td>
+                          </tr>
+                        );
+                      }
+                    })()}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

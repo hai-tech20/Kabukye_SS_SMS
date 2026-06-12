@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import TeacherSidebar from '@/components/sidebar/TeacherSidebar';
+import { getCurrentTerm } from '@/lib/academic-calendar';
 
 interface Teacher {
   id: string;
@@ -75,8 +76,18 @@ export default function ClassResultsPage() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [classInfo, setClassInfo] = useState<{ name: string; stream_name: string } | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
-  const [selectedYear, setSelectedYear] = useState('2026');
-  const [selectedTerm, setSelectedTerm] = useState('1');
+  
+  // Get current term and year for defaults
+  const currentTermData = getCurrentTerm();
+  const getTermNumber = (termName: string) => {
+    if (termName.includes('I') && !termName.includes('II')) return '1';
+    if (termName.includes('II')) return '2';
+    if (termName.includes('III')) return '3';
+    return '1';
+  };
+  
+  const [selectedYear, setSelectedYear] = useState(currentTermData.academicYear.toString());
+  const [selectedTerm, setSelectedTerm] = useState(getTermNumber(currentTermData.name));
   const [selectedSet, setSelectedSet] = useState<'MOT' | 'EOT'>('MOT');
 
   useEffect(() => {
