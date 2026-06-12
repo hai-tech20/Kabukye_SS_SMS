@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "next dev",
     "build": "next build",
-    "start": "next start -p 3000",
-    "lint": "eslint",
+    "start": "next start",
+    "lint": "next lint",
     "dev:sms": "next dev -p 3000",
     "dev:website": "cd \"kabukyeSS website\" && npm start",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:website\"",
