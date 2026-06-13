@@ -261,28 +261,22 @@ export default function ApplicationsManagement() {
                     <td className="px-6 py-4 whitespace-nowrap text-gray-600">{application.former_school || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-gray-600">{application.district}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-gray-500">{formatDate(application.created_at)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleView(application)}
-                          className="text-blue-600 hover:text-blue-800 font-medium"
-                        >
-                          View
-                        </button>
-                        <button
-                          onClick={() => handleApproveClick(application)}
-                          className="text-green-600 hover:text-green-800 font-medium"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleDelete(application.id)}
-                          className="text-red-600 hover:text-red-800 font-medium"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
+<td className="px-6 py-4 whitespace-nowrap">
+                       <div className="flex gap-2">
+                         <button
+                           onClick={() => handleView(application)}
+                           className="text-blue-600 hover:text-blue-800 font-medium"
+                         >
+                           View
+                         </button>
+                         <button
+                           onClick={() => handleDelete(application.id)}
+                           className="text-red-600 hover:text-red-800 font-medium"
+                         >
+                           Delete
+                         </button>
+                       </div>
+                     </td>
                   </tr>
                 ))}
               </tbody>
