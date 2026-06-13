@@ -459,12 +459,12 @@ export default function StudentsManagement() {
   );
 
   return (
-    <div className="h-screen bg-gray-50 overflow-hidden flex">
+    <div className="min-h-screen bg-gray-50">
       {/* Sidebar - Fixed Position */}
       <AdminSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
 
       {/* Main Content - Scrollable */}
-      <div className={`flex-1 h-full overflow-y-auto transition-all duration-300 pt-16 lg:pt-0 ${
+      <div className={`transition-all duration-300 pt-16 lg:pt-0 ${
         sidebarOpen ? 'lg:ml-64' : 'lg:ml-20'
       }`}>
         <div className="p-4 lg:p-8">
@@ -542,36 +542,20 @@ export default function StudentsManagement() {
             </div>
           </div>
 
-          {/* Students Table */}
-          <div className="bg-white shadow-md rounded-lg overflow-hidden">
+          {/* Desktop Table View */}
+          <div className="hidden md:block bg-white shadow-md rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Photo
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Class
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Stream
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      SchoolPay Code
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Subject Combination
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Photo</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stream</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SchoolPay Code</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject Combination</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -648,6 +632,54 @@ export default function StudentsManagement() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden space-y-3">
+            {filteredStudents.map((student) => (
+              <div key={student.id} className="bg-white rounded-lg shadow p-4 border border-gray-200">
+                <div className="flex items-start mb-3">
+                  <div className="mr-3 flex-shrink-0">
+                    {student.photo_url ? (
+                      <img
+                        src={`${student.photo_url}?t=${Date.now()}`}
+                        alt={student.full_name}
+                        className="h-12 w-12 rounded-full object-cover border-2 border-gray-200"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="h-12 w-12 bg-gray-300 rounded-full flex items-center justify-center">
+                        <svg className="h-6 w-6 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-gray-800">{student.full_name}</h3>
+                    <p className="text-sm text-gray-500">{student.schoolpay_code}</p>
+                    <p className="text-sm text-gray-500">{student.sms_classes?.name} - {student.sms_streams?.name}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-3">
+                  <span className={`px-2 py-1 rounded-full text-xs ${
+                    student.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {student.status}
+                  </span>
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={() => setEditingStudent(student)}
+                      className="text-blue-900 text-sm font-medium"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
           </>
           )}

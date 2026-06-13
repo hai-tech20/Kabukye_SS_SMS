@@ -344,12 +344,12 @@ export default function TeachersManagement() {
   };
 
   return (
-    <div className="h-screen bg-gray-50 overflow-hidden flex">
+    <div className="min-h-screen bg-gray-50">
       {/* Sidebar - Fixed Position */}
       <AdminSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
 
       {/* Main Content - Scrollable */}
-      <div className={`flex-1 h-full overflow-y-auto transition-all duration-300 pt-16 lg:pt-0 ${
+      <div className={`transition-all duration-300 pt-16 lg:pt-0 ${
         sidebarOpen ? 'lg:ml-64' : 'lg:ml-20'
       }`}>
         <div className="p-4 lg:p-8">
@@ -394,8 +394,8 @@ export default function TeachersManagement() {
                 </div>
               </div>
 
-              {/* Teachers Table */}
-              <div className="bg-white shadow-md rounded-lg overflow-hidden">
+              {/* Desktop Table View */}
+              <div className="hidden md:block bg-white shadow-md rounded-lg overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -457,6 +457,43 @@ export default function TeachersManagement() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="md:hidden space-y-3">
+                {teachers.map((teacher) => (
+                  <div key={teacher.id} className="bg-white rounded-lg shadow p-4 border border-gray-200">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-bold text-gray-800">{teacher.full_name}</h3>
+                      <span className={`px-2 py-1 rounded-full text-xs ${getRoleBadgeColor(teacher.role)}`}>
+                        {teacher.role.charAt(0).toUpperCase() + teacher.role.slice(1)}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500 mb-1">Code: {teacher.teacher_code}</p>
+                    <p className="text-sm text-gray-500 mb-1">{teacher.email}</p>
+                    <div className="flex items-center justify-between mt-3">
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        teacher.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {teacher.status}
+                      </span>
+                      <div className="flex gap-3">
+                        <button 
+                          onClick={() => openDetailsModal(teacher)}
+                          className="text-green-600 text-sm font-medium"
+                        >
+                          View
+                        </button>
+                        <button 
+                          onClick={() => openEditModal(teacher)}
+                          className="text-blue-900 text-sm font-medium"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </>
           )}
