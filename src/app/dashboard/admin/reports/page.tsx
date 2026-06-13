@@ -254,11 +254,21 @@ const ReportCardTemplateStudentInfo: React.FC<{
 }> = ({ student, term, year, showCombination }) => (
   <div className="flex gap-3 mb-3 font-serif text-xs text-black">
     <div className="flex-shrink-0">
-      <div className="w-[72px] h-24 border border-gray-800 bg-gray-100 flex items-center justify-center">
-        <svg className="w-10 h-10 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-        </svg>
-      </div>
+      {student.photo_url ? (
+        <Image
+          src={student.photo_url}
+          alt={student.full_name}
+          width={72}
+          height={96}
+          className="w-[72px] h-24 object-cover border border-gray-800"
+        />
+      ) : (
+        <div className="w-[72px] h-24 border border-gray-800 bg-gray-100 flex items-center justify-center">
+          <svg className="w-10 h-10 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+          </svg>
+        </div>
+      )}
     </div>
     <div className="flex-1 grid grid-cols-2 gap-x-6 gap-y-1">
       <div>

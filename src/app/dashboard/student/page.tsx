@@ -306,7 +306,6 @@ export default function StudentDashboard() {
                   <thead className="bg-gray-50">
                     <tr className="border-b border-gray-200">
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200" rowSpan={2}>Subject</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200" rowSpan={2} style={{textAlign: 'center'}}>BOT</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200" colSpan={3} style={{textAlign: 'center'}}>MOT</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200" colSpan={3} style={{textAlign: 'center'}}>EOT</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase text-center font-bold border-r border-gray-200" rowSpan={2}>Final Score</th>
@@ -330,9 +329,6 @@ export default function StudentDashboard() {
                               {mark.subjects?.name || `Subject ID: ${mark.subject_id}`}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">
-                            {mark.bot_score ?? '-'}
-                          </td>
                           <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.mot_p1 ?? '-'}</td>
                           <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.mot_p2 ?? '-'}</td>
                           <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.mot_p3 ?? '-'}</td>
@@ -351,7 +347,7 @@ export default function StudentDashboard() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
+                        <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
                           No marks have been entered for you yet.
                         </td>
                       </tr>

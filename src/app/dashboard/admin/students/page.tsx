@@ -663,21 +663,31 @@ export default function StudentsManagement() {
                     <p className="text-sm text-gray-500">{student.sms_classes?.name} - {student.sms_streams?.name}</p>
                   </div>
                 </div>
-                <div className="flex items-center justify-between mt-3">
-                  <span className={`px-2 py-1 rounded-full text-xs ${
-                    student.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {student.status}
-                  </span>
-                  <div className="flex gap-3">
-                    <button 
-                      onClick={() => setEditingStudent(student)}
-                      className="text-blue-900 text-sm font-medium"
-                    >
-                      Edit
-                    </button>
-                  </div>
-                </div>
+<div className="flex items-center justify-between mt-3">
+                   <span className={`px-2 py-1 rounded-full text-xs ${
+                     student.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                   }`}>
+                     {student.status}
+                   </span>
+                   <div className="flex gap-3">
+                     <button 
+                       onClick={() => {
+                         setSelectedStudent(student);
+                         fetchStudentDetailSubjects(student.id);
+                         setShowDetailsModal(true);
+                       }}
+                       className="text-blue-900 text-sm font-medium"
+                     >
+                       View
+                     </button>
+                     <button 
+                       onClick={() => setEditingStudent(student)}
+                       className="text-blue-900 text-sm font-medium"
+                     >
+                       Edit
+                     </button>
+                   </div>
+                 </div>
               </div>
             ))}
           </div>
