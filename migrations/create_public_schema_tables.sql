@@ -1,6 +1,5 @@
 -- Migration: Create public schema tables for website applications and posts
 -- These tables are shared between the SMS (Next.js) and Website (React) apps
--- The website reads applications and posts from the public schema
 
 -- ========================================
 -- APPLICATIONS TABLE (public schema)
@@ -38,7 +37,7 @@ CREATE TABLE IF NOT EXISTS public.POSTS (
 );
 
 -- ========================================
--- STORAGE BUCKET FOR MEDIA (used by both apps)
+-- STORAGE BUCKET FOR MEDIA
 -- ========================================
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
@@ -51,39 +50,42 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- ========================================
--- RLS POLICIES FOR APPLICATIONS (public schema)
+-- RLS POLICIES FOR APPLICATIONS
 -- ========================================
 ALTER TABLE public.applications ENABLE ROW LEVEL SECURITY;
 
--- Anyone can view applications (public access for website)
+-- Anyone can view applications (public website access)
 CREATE POLICY "Public can view applications" ON public.applications
     FOR SELECT USING (true);
 
--- Only service role can insert/update/delete applications (handled server-side)
+-- Anyone can insert applications (public form submission)
+CREATE POLICY "Public can insert applications" ON public.applications
+    FOR INSERT WITH CHECK (true);
+
+-- Service role can update/delete applications (admin actions)
 CREATE POLICY "Service role can manage applications" ON public.applications
-    FOR ALL USING (
-        auth.role() = 'service_role'
-    );
+    FOR UPDATE USING (auth.role() = 'service_role');
+
+CREATE POLICY "Service role can delete applications" ON public.applications
+    FOR DELETE USING (auth.role() = 'service_role');
 
 -- ========================================
--- RLS POLICIES FOR POSTS (public schema)
+-- RLS POLICIES FOR POSTS
 -- ========================================
 ALTER TABLE public.POSTS ENABLE ROW LEVEL SECURITY;
 
--- Anyone can view posts (public access for website)
+-- Anyone can view posts (public website access)
 CREATE POLICY "Public can view posts" ON public.POSTS
     FOR SELECT USING (true);
 
--- Authenticated users can insert posts (for admin dashboard)
-CREATE POLICY "Authenticated users can insert posts" ON public.POSTS
+-- Authenticated users can manage posts (admin dashboard)
+CREATE POLICY "Authenticated can insert posts" ON public.POSTS
     FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
--- Authenticated users can update their own posts
-CREATE POLICY "Authenticated users can update own posts" ON public.POSTS
+CREATE POLICY "Authenticated can update posts" ON public.POSTS
     FOR UPDATE USING (auth.role() = 'authenticated');
 
--- Authenticated users can delete posts
-CREATE POLICY "Authenticated users can delete posts" ON public.POSTS
+CREATE POLICY "Authenticated can delete posts" ON public.POSTS
     FOR DELETE USING (auth.role() = 'authenticated');
 
 -- ========================================
@@ -93,37 +95,26 @@ ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
 
 -- Public can view media files
 CREATE POLICY "Public can view media files" ON storage.objects
-    FOR SELECT USING (
-        bucket_id = 'media'
-    );
+    FOR SELECT USING (bucket_id = 'media');
 
 -- Authenticated users can upload media
 CREATE POLICY "Authenticated users can upload media" ON storage.objects
-    FOR INSERT WITH CHECK (
-        bucket_id = 'media'
-        AND auth.role() = 'authenticated'
-    );
+    FOR INSERT WITH CHECK (bucket_id = 'media' AND auth.role() = 'authenticated');
 
 -- Authenticated users can update media
 CREATE POLICY "Authenticated users can update media" ON storage.objects
-    FOR UPDATE USING (
-        bucket_id = 'media'
-        AND auth.role() = 'authenticated'
-    );
+    FOR UPDATE USING (bucket_id = 'media' AND auth.role() = 'authenticated');
 
 -- Authenticated users can delete media
 CREATE POLICY "Authenticated users can delete media" ON storage.objects
-    FOR DELETE USING (
-        bucket_id = 'media'
-        AND auth.role() = 'authenticated'
-    );
+    FOR DELETE USING (bucket_id = 'media' AND auth.role() = 'authenticated');
 
 -- ========================================
 -- GRANT PERMISSIONS
 -- ========================================
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.applications TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.applications TO anon;
+GRANT SELECT, INSERT ON public.applications TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.POSTS TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.POSTS TO anon;
+GRANT SELECT ON public.POSTS TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON storage.objects TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON storage.objects TO authenticated;
