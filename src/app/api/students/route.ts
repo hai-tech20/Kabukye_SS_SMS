@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
         `);
     }
 
-// If user is teacher, restrict to their assigned classes and streams
+    // If user is teacher, restrict to their assigned classes and streams
     if (session?.role === 'teacher') {
       const { data: teacherAssignments } = await withRetry(async () =>
         await supabaseAdmin
