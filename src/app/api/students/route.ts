@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, withRetry } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
 import {
-  getSession,
   requireSession,
   requireAdminSession,
   validateImageFile,
