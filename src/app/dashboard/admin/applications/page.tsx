@@ -245,41 +245,41 @@ export default function ApplicationsManagement() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredApplications.map((application) => (
-                  <tr key={application.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="font-medium text-gray-900">{application.student_full_name}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        application.gender === 'Male' ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800'
-                      }`}>
-                        {application.gender}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">{application.class_applying_for}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">{application.former_school || '-'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">{application.district}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-500">{formatDate(application.created_at)}</td>
-<td className="px-6 py-4 whitespace-nowrap">
+{filteredApplications.map((application) => (
+                   <tr key={application.id} className="hover:bg-gray-100 border-b border-gray-200">
+                     <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                       <div className="font-medium text-gray-900">{application.student_full_name}</div>
+                     </td>
+                     <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                       <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                         application.gender === 'Male' ? 'bg-blue-200 text-blue-900' : 'bg-pink-200 text-pink-900'
+                       }`}>
+                         {application.gender}
+                       </span>
+                     </td>
+                     <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200 text-gray-900 font-medium">{application.class_applying_for}</td>
+                     <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200 text-gray-800">{application.former_school || '-'}</td>
+                     <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200 text-gray-800">{application.district}</td>
+                     <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200 text-gray-700">{formatDate(application.created_at)}</td>
+                     <td className="px-6 py-4 whitespace-nowrap">
                        <div className="flex gap-2">
                          <button
                            onClick={() => handleView(application)}
-                           className="text-blue-600 hover:text-blue-800 font-medium"
+                           className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 font-medium text-sm"
                          >
                            View
                          </button>
                          <button
                            onClick={() => handleDelete(application.id)}
-                           className="text-red-600 hover:text-red-800 font-medium"
+                           className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 font-medium text-sm"
                          >
                            Delete
                          </button>
                        </div>
                      </td>
-                  </tr>
-                ))}
-              </tbody>
+                   </tr>
+                 ))}
+               </tbody>
             </table>
           </div>
         </div>

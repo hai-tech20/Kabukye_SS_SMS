@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
         `);
     }
 
-    // If user is teacher, restrict to their assigned classes and streams
+// If user is teacher, restrict to their assigned classes and streams
     if (session?.role === 'teacher') {
       const { data: teacherAssignments } = await withRetry(async () =>
         await supabaseAdmin
@@ -141,43 +141,10 @@ export async function GET(request: NextRequest) {
         // Build OR conditions for each (class_id, stream_id) pair
         const uniqueAssignments = [...new Set(teacherAssignments.map(a => `${a.class_id}:${a.stream_id}`))];
         console.log(`Students API: Teacher assignments:`, uniqueAssignments);
-        
-        // If classId, streamId and subjectId are provided, check if teacher is assigned to this class/subject (any stream)
-        if (classId && streamId && subjectId) {
-          const hasAccess = teacherAssignments.some(a => a.class_id === classId && a.subject_id === subjectId);
-          console.log(`Students API: Checking access for ${classId}:${streamId}, subject ${subjectId} - hasAccess: ${hasAccess}`);
-          if (!hasAccess) {
-            console.log(`Students API: Access denied - teacher not assigned to ${classId} for subject ${subjectId}`);
-            return NextResponse.json({
-              data: [],
-              pagination: { page, limit, total: 0, totalPages: 0 }
-            });
-          }
-        } 
-        // If classId and streamId (no subjectId) are provided, check exact stream assignment
-        else if (classId && streamId) {
-          const hasAccess = uniqueAssignments.some(a => a === `${classId}:${streamId}`);
-          console.log(`Students API: Checking access for ${classId}:${streamId} - hasAccess: ${hasAccess}`);
-          if (!hasAccess) {
-            console.log(`Students API: Access denied - teacher not assigned to ${classId}:${streamId}`);
-            return NextResponse.json({
-              data: [],
-              pagination: { page, limit, total: 0, totalPages: 0 }
-            });
-          }
-        } 
-        // Only class provided - check if teacher has any assignment in this class
-        else if (classId) {
-          const hasClassAccess = teacherAssignments.some(a => a.class_id === classId);
-          console.log(`Students API: Checking class access for ${classId} - hasClassAccess: ${hasClassAccess}`);
-          if (!hasClassAccess) {
-            console.log(`Students API: Access denied - teacher not assigned to class ${classId}`);
-            return NextResponse.json({
-              data: [],
-              pagination: { page, limit, total: 0, totalPages: 0 }
-            });
-          }
-        }
+
+        // Construct the OR filter for all teacher's assigned class:stream pairs
+        const orConditions = uniqueAssignments.map(a => `and(class_id.eq.${a.split(':')[0]},stream_id.eq.${a.split(':')[1]})`).join(',');
+        query = query.or(orConditions);
       } else {
         // Teacher has no assignments, return empty result
         return NextResponse.json({
@@ -193,10 +160,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Apply filters (skip class/stream for A-level with subject filter as they're already applied above)
-    if (!(isALevel && subjectId) && normalizedClassId) {
+    if (!(isALevel && resolvedSubjectId) && normalizedClassId) {
       query = query.ilike('class_id', normalizedClassId);
     }
-    if (!(isALevel && subjectId) && normalizedStreamId) {
+    if (!(isALevel && resolvedSubjectId) && normalizedStreamId) {
       query = query.ilike('stream_id', normalizedStreamId);
     }
     if (search) {

@@ -1233,6 +1233,19 @@ export default function ReportsPage() {
       return;
     }
 
+    // Check if all students have grades
+    const studentsWithoutGrades = students.filter(s => {
+      const studentGrades = grades.filter(g => g.student_id === s.id);
+      return studentGrades.length === 0;
+    });
+
+    if (studentsWithoutGrades.length > 0) {
+      const count = studentsWithoutGrades.length;
+      if (!confirm(`${count} student(s) have no grades recorded. Generate PDF anyway? They will show empty report cards.`)) {
+        return;
+      }
+    }
+
     if (!confirm(`Generate PDF for ${students.length} student(s)? This may take a while.`)) {
       return;
     }
@@ -1510,20 +1523,21 @@ export default function ReportsPage() {
                     </>
                   )}
                 </button>
-                {selectedClass !== 'ALL' && (
-                  <button
-                    onClick={handlePublishResults}
-                    className={`px-6 py-2 rounded-lg transition-colors flex items-center shadow-md font-bold ${
-                      isPublished 
-                        ? 'bg-amber-500 text-white hover:bg-amber-600' 
-                        : 'bg-green-600 text-white hover:bg-green-700'
-                    }`}
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {isPublished ? 'Re-publish Results' : 'Publish Results'}
-                  </button>
+{selectedClass !== 'ALL' && (
+                   <button
+                     onClick={handlePublishResults}
+                     className={`px-6 py-2 rounded-lg transition-colors flex items-center shadow-md font-bold ${
+                       isPublished 
+                         ? 'bg-amber-500 text-white hover:bg-amber-600' 
+                         : 'bg-green-600 text-white hover:bg-green-700'
+                     }`}
+                   >
+                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                     </svg>
+                     {isPublished ? 'Re-publish Results' : 'Publish Results'}
+                   </button>
+                )}
                 )}
                 {selectedClass === 'ALL' && (
                   <div className="text-sm text-gray-600 mt-2">
