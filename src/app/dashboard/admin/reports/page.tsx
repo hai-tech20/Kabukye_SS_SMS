@@ -1538,7 +1538,6 @@ export default function ReportsPage() {
                      {isPublished ? 'Re-publish Results' : 'Publish Results'}
                    </button>
                 )}
-                )}
                 {selectedClass === 'ALL' && (
                   <div className="text-sm text-gray-600 mt-2">
                     Select a specific class before publishing. The publish button appears after you choose a class.
