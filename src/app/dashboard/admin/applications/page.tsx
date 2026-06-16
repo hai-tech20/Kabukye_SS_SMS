@@ -15,8 +15,8 @@ interface Application {
   parent_guardian_phone: string;
   district: string;
   created_at: string;
-  subjects_and_grades: { subject: string; grade: string }[];
-  optional_subject: { subject: string; grade: string };
+  subjects_and_grades: any;
+  optional_subject: any;
   subject_combination: string;
 }
 
@@ -362,47 +362,84 @@ export default function ApplicationsManagement() {
               <div className="mb-8">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Academic Information</h3>
                 
-                {selectedApplication.subjects_and_grades && selectedApplication.subjects_and_grades.length > 0 && (
-                  <div className="mb-4">
-                    <label className="text-sm text-gray-500 mb-2 block">Subjects and Grades</label>
-                    <table className="w-full border">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left border">Subject</th>
-                          <th className="px-4 py-2 text-left border">Grade</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedApplication.subjects_and_grades.map((item, index) => (
-                          <tr key={index}>
-                            <td className="px-4 py-2 border">{item.subject}</td>
-                            <td className="px-4 py-2 border">{item.grade}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                {(() => {
+                  const subjectsList = (() => {
+                    const sg = selectedApplication.subjects_and_grades;
+                    if (!sg) return [];
+                    if (Array.isArray(sg)) return sg;
+                    if (typeof sg === 'object') {
+                      return Object.entries(sg).map(([subject, grade]) => ({
+                        subject: subject.replace(/_/g, ' '),
+                        grade: typeof grade === 'string' ? grade : (grade as any)?.grade || ''
+                      }));
+                    }
+                    return [];
+                  })();
 
-                {selectedApplication.optional_subject && (
-                  <div className="mb-4">
-                    <label className="text-sm text-gray-500 mb-2 block">Optional Subject</label>
-                    <table className="w-full border">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left border">Subject</th>
-                          <th className="px-4 py-2 text-left border">Grade</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td className="px-4 py-2 border">{selectedApplication.optional_subject.subject}</td>
-                          <td className="px-4 py-2 border">{selectedApplication.optional_subject.grade}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                  return subjectsList.length > 0 ? (
+                    <div className="mb-4">
+                      <label className="text-sm text-gray-500 mb-2 block">Subjects and Grades</label>
+                      <table className="w-full border">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left border">Subject</th>
+                            <th className="px-4 py-2 text-left border">Grade</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {subjectsList.map((item: any, index: number) => (
+                            <tr key={index}>
+                              <td className="px-4 py-2 border">{item.subject}</td>
+                              <td className="px-4 py-2 border">{item.grade}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic mb-4">No academic grades recorded.</p>
+                  );
+                })()}
+
+                {(() => {
+                  const optSubject = (() => {
+                    const opt = selectedApplication.optional_subject;
+                    if (!opt) return null;
+                    if (typeof opt === 'object') {
+                      if (opt.subject && opt.grade) {
+                        return { subject: opt.subject, grade: opt.grade };
+                      }
+                      const entries = Object.entries(opt);
+                      if (entries.length > 0) {
+                        return { subject: entries[0][0].replace(/_/g, ' '), grade: String(entries[0][1]) };
+                      }
+                    }
+                    if (typeof opt === 'string') {
+                      return { subject: opt, grade: '' };
+                    }
+                    return null;
+                  })();
+
+                  return optSubject ? (
+                    <div className="mb-4">
+                      <label className="text-sm text-gray-500 mb-2 block">Optional Subject</label>
+                      <table className="w-full border">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left border">Subject</th>
+                            <th className="px-4 py-2 text-left border">Grade</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td className="px-4 py-2 border">{optSubject.subject}</td>
+                            <td className="px-4 py-2 border">{optSubject.grade}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null;
+                })()}
 
                 {selectedApplication.subject_combination && (
                   <div>

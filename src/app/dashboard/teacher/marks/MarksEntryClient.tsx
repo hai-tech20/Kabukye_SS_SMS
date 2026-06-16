@@ -215,26 +215,51 @@ export default function MarksEntryClient({
     fetchPublishedStatus();
   }, [selectedClass, selectedStream, selectedTerm, selectedYear]);
 
-  // Fetch streams and subjects when class changes
+  // Fetch streams when class changes, and clear stream/subject
   useEffect(() => {
     if (!selectedClass) {
       setStreams([]);
-      setSubjects([]);
+      setSelectedStream('');
+      setSelectedSubject('');
       return;
     }
 
-    // Only show streams the teacher is assigned to for this class
     const relevantAssignments = assignments.filter(a => a.class_id === selectedClass);
     const relevantStreamIds = [...new Set(relevantAssignments.map(a => a.stream_id))];
+    const filteredStreams = allStreams.filter((s: any) => relevantStreamIds.includes(s.id));
+    setStreams(filteredStreams);
+    
+    setSelectedStream('');
+    setSelectedSubject('');
+  }, [selectedClass, assignments, allStreams]);
+
+  // Fetch subjects when stream changes, and clear subject
+  useEffect(() => {
+    if (!selectedClass || !selectedStream) {
+      setSubjects([]);
+      setSelectedSubject('');
+      return;
+    }
+
+    // Filter assignments that match both the selected class AND stream
+    const relevantAssignments = assignments.filter(
+      a => a.class_id === selectedClass && a.stream_id === selectedStream
+    );
     const relevantSubjectIds = [...new Set(relevantAssignments.map(a => a.subject_id))];
     
-    const filteredStreams = allStreams.filter((s: any) => relevantStreamIds.includes(s.id));
-    const filteredSubjects = allSubjects.filter((s: any) => relevantSubjectIds.includes(s.id));
-    
-    setStreams(filteredStreams);
+    // Filter and deduplicate subjects by their ID
+    const seenSubjectIds = new Set<string>();
+    const filteredSubjects = allSubjects.filter((s: any) => {
+      if (relevantSubjectIds.includes(s.id) && !seenSubjectIds.has(s.id)) {
+        seenSubjectIds.add(s.id);
+        return true;
+      }
+      return false;
+    });
+
     setSubjects(filteredSubjects);
     setSelectedSubject('');
-  }, [selectedClass, assignments, allStreams, allSubjects]);
+  }, [selectedClass, selectedStream, assignments, allSubjects]);
 
   // Fetch students and grades with parallel fetching and better abort handling
   useEffect(() => {

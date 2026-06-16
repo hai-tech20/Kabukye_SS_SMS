@@ -29,7 +29,7 @@ async function getRoleLoginPath(request: Request): Promise<string> {
 function clearSessionResponse(request: Request, redirectPath: string, redirectToWebsite = false) {
   const target = redirectToWebsite
     ? getWebsiteReportsUrl()
-    : new URL(redirectPath, process.env.NEXT_PUBLIC_APP_URL || request.headers.get('origin') || 'http://localhost:3001').toString();
+    : new URL(redirectPath, request.url).toString();
   const response = NextResponse.redirect(target);
   response.cookies.set('sms_session', '', { maxAge: 0, path: '/' });
   response.cookies.set('sms_entry', '', { maxAge: 0, path: '/' });
