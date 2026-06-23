@@ -568,8 +568,9 @@ export default function StudentsManagement() {
                             alt={student.full_name}
                             className="h-10 w-10 rounded-full object-cover border-2 border-gray-200"
                             onError={(e) => {
-                              console.error('Failed to load photo:', student.photo_url);
-                              (e.target as HTMLImageElement).style.display = 'none';
+                              const target = e.target as HTMLImageElement;
+                              target.onerror = null;
+                              target.src = '/silhouette.png';
                             }}
                           />
                         ) : (

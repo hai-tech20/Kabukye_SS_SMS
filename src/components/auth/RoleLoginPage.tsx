@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 type Role = 'admin' | 'teacher' | 'student';
 
@@ -9,6 +10,8 @@ type RoleLoginPageProps = {
 };
 
 export default function RoleLoginPage({ role }: RoleLoginPageProps) {
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirect');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -60,10 +63,10 @@ export default function RoleLoginPage({ role }: RoleLoginPageProps) {
         return;
       }
 
-      if (data.role === 'admin') window.location.href = '/dashboard/admin';
-      else if (data.role === 'bursar') window.location.href = '/dashboard/bursar';
-      else if (data.role === 'teacher') window.location.href = '/dashboard/teacher';
-      else if (data.role === 'student') window.location.href = '/dashboard/student';
+      if (data.role === 'admin') window.location.href = redirectTo || '/dashboard/admin';
+      else if (data.role === 'bursar') window.location.href = redirectTo || '/dashboard/bursar';
+      else if (data.role === 'teacher') window.location.href = redirectTo || '/dashboard/teacher';
+      else if (data.role === 'student') window.location.href = redirectTo || '/dashboard/student';
       else setError('Unknown role. Contact administrator.');
     } catch (err) {
       console.error('Login error:', err);

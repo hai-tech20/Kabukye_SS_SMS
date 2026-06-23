@@ -36,6 +36,26 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isLoginPath = pathname === '/login' || pathname.startsWith('/login/');
 
+  if (pathname.startsWith('/reports/view')) {
+    const token = request.cookies.get('sms_session')?.value;
+    if (!token) {
+      const loginUrl = new URL('/login/student', request.url);
+      loginUrl.searchParams.set('redirect', pathname + request.nextUrl.search);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    try {
+      await verifyToken(token);
+      return NextResponse.next();
+    } catch {
+      const loginUrl = new URL('/login/student', request.url);
+      loginUrl.searchParams.set('redirect', pathname + request.nextUrl.search);
+      const response = NextResponse.redirect(loginUrl);
+      response.cookies.set('sms_session', '', { maxAge: 0, path: '/' });
+      return response;
+    }
+  }
+
   if (pathname.startsWith('/dashboard')) {
     const token = request.cookies.get('sms_session')?.value;
     const loginPath = loginPathForDashboard(pathname);
@@ -103,5 +123,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/login', '/login/:path*'],
+  matcher: ['/dashboard/:path*', '/login', '/login/:path*', '/reports/view'],
 };

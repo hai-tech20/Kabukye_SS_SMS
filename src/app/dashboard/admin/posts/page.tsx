@@ -24,8 +24,10 @@ interface Application {
   former_school: string;
   parent_guardian_full_name: string;
   parent_guardian_phone: string;
-  parent_guardian_email: string;
-  class_applied_for: string;
+  parent_guardian_email?: string;
+  class_applying_for?: string;
+  class_applied_for?: string;
+  district?: string;
   subjects_and_grades?: Record<string, string>;
   status?: string;
 }
@@ -409,10 +411,10 @@ export default function PostsManagement() {
 
           {showApplications ? (
             // Applications View
-            <div className="space-y-6">
+            <div className="space-y-6 text-gray-900">
               <div className="text-center mb-8">
                 <h2 className="text-3xl font-bold text-gray-900 mb-2">Student Applications</h2>
-                <p className="text-gray-600">View and manage all student applications</p>
+                <p className="text-gray-700">View and manage all student applications</p>
               </div>
 
               {loading ? (
@@ -425,30 +427,32 @@ export default function PostsManagement() {
                   <p className="text-gray-600">No applications found.</p>
                 </div>
               ) : (
-                <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-                  <table className="w-full">
-                    <thead className="bg-gray-50">
+                <div className="bg-white rounded-xl shadow-lg overflow-hidden text-gray-900">
+                  <table className="w-full text-gray-900">
+                    <thead className="bg-gray-100">
                       <tr>
                         <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Student Name</th>
                         <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Class Applied</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">District</th>
                         <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Parent Contact</th>
                         <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Date Applied</th>
                         <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200">
+                    <tbody className="divide-y divide-gray-200 bg-white">
                       {applications.map((app) => (
                         <tr key={app.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4">
                             <div className="font-medium text-gray-900">{app.student_full_name}</div>
-                            <div className="text-sm text-gray-500">{app.gender}</div>
+                            <div className="text-sm text-gray-700">{app.gender}</div>
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-900">{app.class_applied_for}</td>
+                          <td className="px-6 py-4 text-sm font-medium text-gray-900">{app.class_applying_for || app.class_applied_for || '—'}</td>
+                          <td className="px-6 py-4 text-sm text-gray-900">{app.district || '—'}</td>
                           <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900">{app.parent_guardian_full_name}</div>
-                            <div className="text-sm text-gray-500">{app.parent_guardian_phone}</div>
+                            <div className="text-sm font-medium text-gray-900">{app.parent_guardian_full_name}</div>
+                            <div className="text-sm text-gray-700">{app.parent_guardian_phone}</div>
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-500">{formatDate(app.created_at)}</td>
+                          <td className="px-6 py-4 text-sm text-gray-800">{formatDate(app.created_at)}</td>
                           <td className="px-6 py-4">
                             <div className="flex gap-2">
                               <button
@@ -643,8 +647,8 @@ export default function PostsManagement() {
                       <p className="text-gray-900">{selectedApplication.date_of_birth}</p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Class Applied For</label>
-                      <p className="text-gray-900">{selectedApplication.class_applied_for}</p>
+                      <label className="text-sm font-medium text-gray-700">Class Applied For</label>
+                      <p className="font-medium text-gray-900">{selectedApplication.class_applying_for || selectedApplication.class_applied_for || '—'}</p>
                     </div>
                   </div>
 
