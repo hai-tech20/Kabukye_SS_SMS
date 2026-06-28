@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import AdminSidebar from '@/components/sidebar/AdminSidebar';
+import { compressStudentPhoto } from '@/lib/compressImage';
 
 interface Student {
   id: string;
@@ -62,6 +63,8 @@ export default function StudentsManagement() {
   
   // Photo upload state for edit mode
   const [newPhotoFile, setNewPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
   
   // Refs for request deduplication
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -1059,10 +1062,41 @@ export default function StudentsManagement() {
                               <input
                                 type="file"
                                 name="photo"
-                                accept="image/*"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0] || null;
-                                  setNewPhotoFile(file);
+                                accept="image/jpeg,image/png,image/webp,image/jpg"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+
+                                  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+                                  if (!allowedTypes.includes(file.type)) {
+                                    alert('Please upload a JPEG, PNG or WebP image only');
+                                    e.target.value = '';
+                                    return;
+                                  }
+
+                                  if (file.size > 10 * 1024 * 1024) {
+                                    alert('Image is too large. Please use an image under 10MB');
+                                    e.target.value = '';
+                                    return;
+                                  }
+
+                                  setPhotoLoading(true);
+                                  setPhotoPreview(null);
+
+                                  try {
+                                    const compressedFile = await compressStudentPhoto(file);
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      setPhotoPreview(reader.result as string);
+                                    };
+                                    reader.readAsDataURL(compressedFile);
+                                    setNewPhotoFile(compressedFile);
+                                  } catch (error) {
+                                    console.error('Compression error:', error);
+                                    setNewPhotoFile(file);
+                                  } finally {
+                                    setPhotoLoading(false);
+                                  }
                                 }}
                                 className="hidden"
                               />
@@ -1071,7 +1105,10 @@ export default function StudentsManagement() {
                             {newPhotoFile && (
                               <button
                                 type="button"
-                                onClick={() => setNewPhotoFile(null)}
+                                onClick={() => {
+                                  setNewPhotoFile(null);
+                                  setPhotoPreview(null);
+                                }}
                                 className="p-2 text-red-500 hover:bg-red-50 rounded-md transition-colors"
                                 title="Remove selected photo"
                               >
@@ -1079,6 +1116,28 @@ export default function StudentsManagement() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                               </button>
+                            )}
+                            
+                            {/* Show loading while compressing */}
+                            {photoLoading && (
+                              <div className="mt-2 flex items-center gap-2 text-sm text-blue-600">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"/>
+                                <span>Compressing photo...</span>
+                              </div>
+                            )}
+                            
+                            {/* Show preview after compression */}
+                            {photoPreview && !photoLoading && (
+                              <div className="mt-2">
+                                <img
+                                  src={photoPreview}
+                                  alt="Preview"
+                                  className="w-20 h-24 object-cover border border-gray-300 rounded"
+                                />
+                                <p className="text-xs text-green-600 mt-1">
+                                  ✓ Photo compressed and ready to upload
+                                </p>
+                              </div>
                             )}
                           </div>
                         </div>

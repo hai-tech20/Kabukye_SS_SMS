@@ -120,8 +120,7 @@ export async function PUT(
       
       if (photo && photo.size > 0) {
         try {
-          const fileExt = photo.name.split('.').pop() || 'jpg';
-          const fileName = `${id}.${fileExt}`;
+          const fileName = `${id}.jpg`;
           const filePath = `students/${fileName}`;
           
           console.log('PUT: Uploading photo to path:', filePath, 'Name:', photo.name);
@@ -129,7 +128,7 @@ export async function PUT(
           const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
             .from('student-photos')
             .upload(filePath, photo, {
-              contentType: photo.type,
+              contentType: 'image/jpeg',
               upsert: true
             });
 

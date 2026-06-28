@@ -332,8 +332,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: photoError }, { status: 400 });
       }
       try {
-        const fileExt = studentData.photo.name.split('.').pop() || 'jpg';
-        const fileName = `${studentId}.${fileExt}`;
+        const fileName = `${studentId}.jpg`;
         const filePath = `students/${fileName}`;
         
         console.log('Uploading photo:', fileName, 'Size:', studentData.photo.size, 'Type:', studentData.photo.type);
@@ -342,7 +341,7 @@ export async function POST(request: NextRequest) {
         const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
           .from('student-photos')
           .upload(filePath, studentData.photo, {
-            contentType: studentData.photo.type,
+            contentType: 'image/jpeg',
             upsert: true
           });
         
