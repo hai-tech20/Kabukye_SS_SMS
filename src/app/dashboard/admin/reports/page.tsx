@@ -1016,8 +1016,6 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-export default function ReportsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [students, setStudents] = useState<Student[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
