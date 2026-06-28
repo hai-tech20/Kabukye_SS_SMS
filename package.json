@@ -20,6 +20,7 @@
     "@types/react-datepicker": "^6.2.0",
     "autoprefixer": "^10.4.27",
     "bcryptjs": "^3.0.3",
+    "browser-image-compression": "^2.0.2",
     "dotenv": "^17.4.0",
     "html2canvas": "^1.4.1",
     "jose": "^6.2.2",
@@ -29,8 +30,8 @@
     "react": "18.3.1",
     "react-datepicker": "^9.1.0",
     "react-dom": "18.3.1",
-    "sonner": "^2.0.7",
-    "sharp": "^0.33.4"
+    "sharp": "^0.33.4",
+    "sonner": "^2.0.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.2",
