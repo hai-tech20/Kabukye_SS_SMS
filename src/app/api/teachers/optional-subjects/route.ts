@@ -39,8 +39,7 @@ export async function GET(request: Request) {
         student_optional_subjects(
           id,
           subject_id,
-          assigned_by,
-          subjects:subject_id(id, name)
+          assigned_by
         )
       `)
       .eq('class_id', normalizedClassId);
@@ -76,7 +75,29 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({ data: data || [] });
+    // Fetch all subjects in one query
+    let subjectsData: any[] = [];
+    const allOptionalSubjects = (data || []).flatMap((student: any) => student.student_optional_subjects || []);
+    if (allOptionalSubjects.length > 0) {
+      const subjectIds = Array.from(new Set(allOptionalSubjects.map((os: any) => os.subject_id)));
+      const { data: subjects } = await supabaseAdmin
+        .from('subjects')
+        .select('id, name')
+        .in('id', subjectIds);
+      if (subjects) subjectsData = subjects;
+    }
+
+    const subjectMap = new Map(subjectsData.map((s: any) => [s.id, s]));
+
+    const enrichedData = (data || []).map((student: any) => ({
+      ...student,
+      student_optional_subjects: (student.student_optional_subjects || []).map((os: any) => ({
+        ...os,
+        subjects: subjectMap.get(os.subject_id) || null
+      }))
+    }));
+
+    return NextResponse.json({ data: enrichedData });
   } catch (err) {
     console.error('Error in GET /api/teachers/optional-subjects:', err);
     return NextResponse.json(

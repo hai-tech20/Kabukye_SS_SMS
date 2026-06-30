@@ -138,11 +138,18 @@ export async function GET(request: NextRequest) {
 
       if (teacherAssignments && teacherAssignments.length > 0) {
         // Build OR conditions for each (class_id, stream_id) pair
-        const uniqueAssignments = [...new Set(teacherAssignments.map(a => `${a.class_id}:${a.stream_id}`))];
-        console.log(`Students API: Teacher assignments:`, uniqueAssignments);
-
-        // Construct the OR filter for all teacher's assigned class:stream pairs
-        const orConditions = uniqueAssignments.map(a => `and(class_id.eq.${a.split(':')[0]},stream_id.eq.${a.split(':')[1]})`).join(',');
+        // Handle null stream_id as "all streams for this class"
+        const orConditions = teacherAssignments
+          .filter((a: any) => a.class_id)
+          .map((a: any) => {
+            if (a.stream_id) {
+              return `and(class_id.eq.${a.class_id},stream_id.eq.${a.stream_id})`;
+            } else {
+              return `class_id.eq.${a.class_id}`;
+            }
+          })
+          .join(',');
+        console.log(`Students API: Teacher assignments OR conditions:`, orConditions);
         query = query.or(orConditions);
       } else {
         // Teacher has no assignments, return empty result

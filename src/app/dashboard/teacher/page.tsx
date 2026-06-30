@@ -121,7 +121,7 @@ export default function TeacherDashboard() {
         subject_id: assignment.subject_id,
         subject_name: assignment.subjects?.name || assignment.sms_subjects?.name || 'Unknown Subject',
         stream_id: assignment.stream_id,
-        stream_name: assignment.streams?.name || assignment.sms_streams?.name || 'Unknown Stream'
+        stream_name: assignment.streams?.name || assignment.sms_streams?.name || (assignment.stream_id ? 'Unknown Stream' : 'All Streams')
       });
     });
     

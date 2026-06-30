@@ -39,6 +39,21 @@ const resolveAlevelSubjectGrade = (codes: string[], paperCount: number): string 
     return 'F';
   }
 
+  if (paperCount === 4) {
+    if (num_d >= 3) return 'A';
+    if (num_d >= 2 && hasC3) return 'A';
+    if (num_d === 2 && num_c >= 1) return 'B';
+    if (num_d === 1 && num_c >= 2 && hasC3) return 'B';
+    if (num_c >= 3) return 'C';
+    if (num_c === 2 && num_p === 1) return 'C';
+    if (num_c === 1 && num_p === 2) return 'D';
+    if (num_d === 1 && num_c === 1 && num_p === 1) return 'D';
+    if (num_p >= 3) return 'E';
+    if (num_p === 2 && num_f === 1 && num_d === 0 && num_c === 0) return 'E';
+    if (num_f === 2 && (num_d >= 1 || num_c >= 1)) return 'O';
+    return 'F';
+  }
+
   if (num_d === 2 || (num_d === 1 && (hasC3 || hasC4))) return 'A';
   if ((num_d === 1 && (hasC5 || hasC6)) || (num_c === 2 && (hasC3 || hasC4))) return 'B';
   if (num_c === 2) return 'C';
@@ -239,7 +254,7 @@ export async function GET(request: NextRequest) {
 
         if (weightedScores.length > 0) {
           finalScore = Math.round(weightedScores.reduce((sum, value) => sum + value, 0) / weightedScores.length);
-          const paperCount = g.subjects?.paper_count ?? weightedScores.length;
+          const paperCount = Math.min(g.subjects?.paper_count ?? weightedScores.length, weightedScores.length);
           const weightedCodes = weightedScores.map(s => scoreToUnebCode(Math.round(s)));
           const resolvedGrade = resolveAlevelSubjectGrade(weightedCodes, paperCount);
           gradeLabel = resolvedGrade;

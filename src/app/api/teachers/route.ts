@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       
       // Handle subject assignments
       for (const assignment of subjectAssignments) {
-        if (assignment.subject_id && assignment.class_id && assignment.stream_id) {
+        if (assignment.subject_id && assignment.class_id) {
           console.log('POST: Inserting assignment:', assignment);
           const { error: subjectError } = await supabaseAdmin
             .from('teacher_subjects')
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
               id: `tsub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
               teacher_id: teacher.id,
               class_id: assignment.class_id,
-              stream_id: assignment.stream_id,
+              stream_id: assignment.stream_id || null,
               subject_id: assignment.subject_id
             });
           if (subjectError) {

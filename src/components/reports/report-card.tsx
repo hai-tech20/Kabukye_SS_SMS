@@ -337,7 +337,7 @@ const ReportCardTemplateFooter: React.FC<{
   </div>
 );
 
-const O_LEVEL_FIXED_SUBJECTS = [
+const S1_S2_FIXED_SUBJECTS = [
   'Mathematics',
   'History & Political Education',
   'English',
@@ -346,9 +346,18 @@ const O_LEVEL_FIXED_SUBJECTS = [
   'Biology',
   'Chemistry',
   'Physical Education',
-  'Religious Education (CRE/IRE)',
   'Entrepreneurship',
   'Kiswahili',
+];
+
+const S3_S4_FIXED_SUBJECTS = [
+  'Mathematics',
+  'History & Political Education',
+  'English',
+  'Geography',
+  'Physics',
+  'Biology',
+  'Chemistry',
 ];
 
 const ReportCardOfficialGradingScale: React.FC = () => (
@@ -390,6 +399,8 @@ const getOLevelResult = (averageScore: number): string => {
 
 interface ReportCardOLevelProps extends ReportCardProps {
   optionalSubjects?: Array<{ id: string; name: string }>;
+  fixedSubjects?: string[];
+  optionalCount?: number;
   showResult?: boolean;
 }
 
@@ -409,6 +420,8 @@ const ReportCardOLevel: React.FC<ReportCardOLevelProps> = (props) => {
     classTeacherComment,
     headTeacherComment,
     showResult,
+    fixedSubjects = S1_S2_FIXED_SUBJECTS,
+    optionalCount = 2,
   } = props;
 
   const gradesMap = new Map<string, Grade>();
@@ -447,14 +460,12 @@ const ReportCardOLevel: React.FC<ReportCardOLevelProps> = (props) => {
     return undefined;
   };
 
-  const allSubjects = [...O_LEVEL_FIXED_SUBJECTS];
+  const allSubjects = [...fixedSubjects];
   
-  // Add optional subjects, ensuring we add up to 2
-  const optionalToAdd = optionalSubjects?.slice(0, 2) || [];
+  const optionalToAdd = optionalSubjects?.slice(0, optionalCount) || [];
   optionalToAdd.forEach((opt) => allSubjects.push(opt.name));
   
-  // Pad with empty strings if we have fewer than 2 optional subjects
-  while (allSubjects.length < O_LEVEL_FIXED_SUBJECTS.length + 2) {
+  while (allSubjects.length < fixedSubjects.length + optionalCount) {
     allSubjects.push('');
   }
 
@@ -541,7 +552,7 @@ interface ReportCardS1S2Props extends ReportCardProps {
 }
 
 const ReportCardS1S2: React.FC<ReportCardS1S2Props> = (props) => (
-  <ReportCardOLevel {...props} />
+  <ReportCardOLevel {...props} fixedSubjects={S1_S2_FIXED_SUBJECTS} optionalCount={3} />
 );
 
 interface ReportCardS3S4Props extends ReportCardProps {
@@ -549,7 +560,7 @@ interface ReportCardS3S4Props extends ReportCardProps {
 }
 
 const ReportCardS3S4: React.FC<ReportCardS3S4Props> = (props) => (
-  <ReportCardOLevel {...props} showResult />
+  <ReportCardOLevel {...props} fixedSubjects={S3_S4_FIXED_SUBJECTS} optionalCount={2} showResult />
 );
 
 interface ReportCardS5S6Props extends ReportCardProps {

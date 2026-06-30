@@ -3,8 +3,21 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+  const Sidebar = SidebarComponent || TeacherSidebar;
 import TeacherSidebar from '@/components/sidebar/TeacherSidebar';
 import { getCurrentTerm } from '@/lib/academic-calendar';
+
+type SidebarComponent = React.ComponentType<{ sidebarOpen: boolean; setSidebarOpen: (open: boolean) => void }>;
+
+interface MarksEntryClientProps {
+  initialAssignments: Assignment[];
+  initialClasses: any[];
+  initialStreams: any[];
+  initialSubjects: any[];
+  teacherId: string;
+  error: string | null;
+  SidebarComponent?: SidebarComponent;
+}
 
 interface Student {
   id: string;
@@ -27,9 +40,11 @@ interface GradeEntry {
   mot_p1?: number;
   mot_p2?: number;
   mot_p3?: number;
+  mot_p4?: number;
   eot_p1?: number;
   eot_p2?: number;
   eot_p3?: number;
+  eot_p4?: number;
 }
 
 interface Subject {
@@ -46,15 +61,6 @@ interface Assignment {
   classes?: { name: string };
   streams?: { name: string };
   subjects?: { name: string; paper_count: number };
-}
-
-interface MarksEntryClientProps {
-  initialAssignments: Assignment[];
-  initialClasses: any[];
-  initialStreams: any[];
-  initialSubjects: any[];
-  teacherId: string;
-  error: string | null;
 }
 
 export default function MarksEntryClient({
@@ -225,29 +231,52 @@ export default function MarksEntryClient({
     }
 
     const relevantAssignments = assignments.filter(a => a.class_id === selectedClass);
-    const relevantStreamIds = [...new Set(relevantAssignments.map(a => a.stream_id))];
+    const hasNullStream = relevantAssignments.some(a => a.stream_id == null || a.stream_id === '');
+    
+    let relevantStreamIds: string[];
+    if (hasNullStream) {
+      relevantStreamIds = allStreams.filter(s => s.class_id === selectedClass).map(s => s.id);
+    } else {
+      relevantStreamIds = [...new Set(relevantAssignments.map(a => a.stream_id).filter(Boolean))];
+    }
+    
     const filteredStreams = allStreams.filter((s: any) => relevantStreamIds.includes(s.id));
     setStreams(filteredStreams);
     
-    setSelectedStream('');
+    if (hasNullStream) {
+      setSelectedStream('ALL');
+    } else {
+      setSelectedStream('');
+    }
     setSelectedSubject('');
   }, [selectedClass, assignments, allStreams]);
 
   // Fetch subjects when stream changes, and clear subject
   useEffect(() => {
-    if (!selectedClass || !selectedStream) {
+    if (!selectedClass) {
       setSubjects([]);
       setSelectedSubject('');
       return;
     }
 
-    // Filter assignments that match both the selected class AND stream
-    const relevantAssignments = assignments.filter(
-      a => a.class_id === selectedClass && a.stream_id === selectedStream
-    );
-    const relevantSubjectIds = [...new Set(relevantAssignments.map(a => a.subject_id))];
+    const relevantAssignments = assignments.filter(a => a.class_id === selectedClass);
+    const hasNullStream = relevantAssignments.some(a => a.stream_id == null || a.stream_id === '');
     
-    // Filter and deduplicate subjects by their ID
+    let filteredAssignments: any[];
+    if (hasNullStream && (selectedStream === 'ALL' || !selectedStream)) {
+      filteredAssignments = relevantAssignments;
+    } else if (selectedStream) {
+      filteredAssignments = relevantAssignments.filter(
+        a => (a.stream_id || '') === selectedStream
+      );
+    } else {
+      setSubjects([]);
+      setSelectedSubject('');
+      return;
+    }
+    
+    const relevantSubjectIds = [...new Set(filteredAssignments.map(a => a.subject_id))];
+    
     const seenSubjectIds = new Set<string>();
     const filteredSubjects = allSubjects.filter((s: any) => {
       if (relevantSubjectIds.includes(s.id) && !seenSubjectIds.has(s.id)) {
@@ -278,7 +307,9 @@ export default function MarksEntryClient({
       try {
         const params = new URLSearchParams();
         params.append('class_id', selectedClass);
-        params.append('stream_id', selectedStream);
+        if (selectedStream && selectedStream !== 'ALL') {
+          params.append('stream_id', selectedStream);
+        }
         params.append('subject_id', selectedSubject);
         params.append('term', selectedTerm);
         params.append('academic_year', selectedYear);
@@ -337,9 +368,11 @@ export default function MarksEntryClient({
             mot_p1: paperScores[1]?.mot ?? (hasSinglePaper ? existingGrade?.mot_score : undefined),
             mot_p2: paperScores[2]?.mot ?? undefined,
             mot_p3: paperScores[3]?.mot ?? undefined,
+            mot_p4: paperScores[4]?.mot ?? undefined,
             eot_p1: paperScores[1]?.eot ?? (hasSinglePaper ? existingGrade?.eot_score : undefined),
             eot_p2: paperScores[2]?.eot ?? undefined,
-            eot_p3: paperScores[3]?.eot ?? undefined
+            eot_p3: paperScores[3]?.eot ?? undefined,
+            eot_p4: paperScores[4]?.eot ?? undefined
           };
         });
 
@@ -376,9 +409,8 @@ export default function MarksEntryClient({
   };
 
   const calculateFinalScore = (grade: GradeEntry) => {
-    // Use only filled paper scores, don't assume all papers exist
-    const motPapers = [grade.mot_p1, grade.mot_p2, grade.mot_p3].filter((p): p is number => p !== undefined && p !== null);
-    const eotPapers = [grade.eot_p1, grade.eot_p2, grade.eot_p3].filter((p): p is number => p !== undefined && p !== null);
+    const motPapers = [grade.mot_p1, grade.mot_p2, grade.mot_p3, grade.mot_p4].filter((p): p is number => p !== undefined && p !== null);
+    const eotPapers = [grade.eot_p1, grade.eot_p2, grade.eot_p3, grade.eot_p4].filter((p): p is number => p !== undefined && p !== null);
     
     let motScore = 0;
     if (motPapers.length > 0) {
@@ -422,12 +454,12 @@ export default function MarksEntryClient({
       setSaving(true);
       
       const gradesData = grades.map(g => {
-        const motPapers = [g.mot_p1, g.mot_p2, g.mot_p3].filter((p): p is number => p !== undefined && p !== null);
+        const motPapers = [g.mot_p1, g.mot_p2, g.mot_p3, g.mot_p4].filter((p): p is number => p !== undefined && p !== null);
         const motScore = motPapers.length > 0 
           ? Math.round(motPapers.reduce((a, b) => a + b, 0) / motPapers.length)
           : undefined;
         
-        const eotPapers = [g.eot_p1, g.eot_p2, g.eot_p3].filter((p): p is number => p !== undefined && p !== null);
+        const eotPapers = [g.eot_p1, g.eot_p2, g.eot_p3, g.eot_p4].filter((p): p is number => p !== undefined && p !== null);
         const eotScore = eotPapers.length > 0
           ? Math.round(eotPapers.reduce((a, b) => a + b, 0) / eotPapers.length)
           : undefined;
@@ -450,9 +482,11 @@ export default function MarksEntryClient({
         if (g.eot_p2 !== undefined && g.eot_p2 !== null) gradeData.eot_p2 = g.eot_p2;
         if (g.mot_p3 !== undefined && g.mot_p3 !== null) gradeData.mot_p3 = g.mot_p3;
         if (g.eot_p3 !== undefined && g.eot_p3 !== null) gradeData.eot_p3 = g.eot_p3;
+        if (g.mot_p4 !== undefined && g.mot_p4 !== null) gradeData.mot_p4 = g.mot_p4;
+        if (g.eot_p4 !== undefined && g.eot_p4 !== null) gradeData.eot_p4 = g.eot_p4;
         
         return gradeData;
-      }).filter(g => Object.keys(g).length > 6); // Ensure at least student_id, class_id, stream_id, subject_id, term, year and some score
+      }).filter(g => Object.keys(g).length > 6);
 
       if (gradesData.length === 0) {
         alert('No grades to save. Please enter marks first.');
@@ -525,9 +559,11 @@ export default function MarksEntryClient({
               mot_p1: motP1 !== undefined ? motP1 : (hasSinglePaper ? existingGrade?.mot_score : undefined),
               mot_p2: existingGrade?.p2_score ?? paperScores[2]?.mot ?? undefined,
               mot_p3: existingGrade?.p3_score ?? paperScores[3]?.mot ?? undefined,
+              mot_p4: existingGrade?.p4_score ?? paperScores[4]?.mot ?? undefined,
               eot_p1: eotP1 !== undefined ? eotP1 : (hasSinglePaper ? existingGrade?.eot_score : undefined),
               eot_p2: existingGrade?.p2_eot_score ?? paperScores[2]?.eot ?? undefined,
-              eot_p3: existingGrade?.p3_eot_score ?? paperScores[3]?.eot ?? undefined
+              eot_p3: existingGrade?.p3_eot_score ?? paperScores[3]?.eot ?? undefined,
+              eot_p4: existingGrade?.p4_eot_score ?? paperScores[4]?.eot ?? undefined
             };
           });
 
@@ -554,11 +590,12 @@ export default function MarksEntryClient({
   };
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const Sidebar = SidebarComponent || TeacherSidebar;
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar - Fixed Position */}
-      <TeacherSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+      <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
 
       {/* Main Content - Scrollable */}
       <div className={`flex-1 pt-16 lg:pt-0 min-h-screen transition-all duration-300 ${
@@ -713,7 +750,10 @@ export default function MarksEntryClient({
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">P2</th>
                     )}
                     {paperCount >= 3 && (
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P3</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">P3</th>
+                    )}
+                    {paperCount >= 4 && (
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P4</th>
                     )}
                   </tr>
                 </thead>
@@ -751,13 +791,25 @@ export default function MarksEntryClient({
                           </td>
                         )}
                         {paperCount >= 3 && (
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
                             <input
                               type="number"
                               min="0"
                               max="100"
                               value={grade?.[`${prefix}_p3`] ?? ''}
                               onChange={(e) => handleGradeChange(student.id, `${prefix}_p3`, e.target.value)}
+                              className="w-20 border border-gray-300 rounded px-2 py-1"
+                            />
+                          </td>
+                        )}
+                        {paperCount >= 4 && (
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={grade?.[`${prefix}_p4`] ?? ''}
+                              onChange={(e) => handleGradeChange(student.id, `${prefix}_p4`, e.target.value)}
                               className="w-20 border border-gray-300 rounded px-2 py-1"
                             />
                           </td>

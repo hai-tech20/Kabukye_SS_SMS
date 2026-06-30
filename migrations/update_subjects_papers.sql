@@ -67,7 +67,7 @@ BEGIN
         ('a-lit-' || cid, 'Literature in English', cid, 3),
         ('a-agric-' || cid, 'Agriculture', cid, 3),
         ('a-ent-' || cid, 'Entrepreneurship', cid, 3), -- Research says 3 papers
-        ('a-art-' || cid, 'Fine Art', cid, 3), -- As requested by user
+        ('a-art-' || cid, 'Fine Art', cid, 4), -- Fine Art has P1, P2, P3, P4 for S5/S6
         ('a-gp-' || cid, 'General Paper', cid, 1),
         ('a-sub-ict-' || cid, 'Sub ICT', cid, 2),
         ('a-sub-math-' || cid, 'Sub Mathematics', cid, 1),

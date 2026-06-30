@@ -105,79 +105,83 @@ export default function TeachersManagement() {
       data.append('phone', formData.phone);
       data.append('gender', formData.gender);
       
-      if (formData.role === 'class_teacher') {
-        data.append('is_class_teacher', 'true');
-        data.append('class_teacher_class_id', formData.class_id);
-        data.append('class_teacher_stream_id', formData.stream_id);
-      } else {
-        data.append('is_class_teacher', 'false');
-      }
+       if (formData.role === 'class_teacher') {
+         data.append('is_class_teacher', 'true');
+         data.append('class_teacher_class_id', formData.class_id);
+         const isALevel = ['s5', 's6'].includes(formData.class_id.toLowerCase());
+         data.append('class_teacher_stream_id', isALevel ? '' : formData.stream_id);
+       } else {
+         data.append('is_class_teacher', 'false');
+       }
 
-      const finalSubjectAssignments = formData.role === 'class_teacher' && formData.class_id && formData.stream_id 
-        ? [
-            ...subjectAssignments,
-            {
-              subject_id: '',
-              class_id: formData.class_id,
-              stream_id: formData.stream_id
-            }
-          ]
-        : subjectAssignments;
+       const isALevel = ['s5', 's6'].includes(formData.class_id.toLowerCase());
+       const finalSubjectAssignments = formData.role === 'class_teacher' && formData.class_id
+         ? [
+             ...subjectAssignments,
+             {
+               subject_id: '',
+               class_id: formData.class_id,
+               stream_id: isALevel ? '' : formData.stream_id
+             }
+           ]
+         : subjectAssignments;
 
-      data.append('subject_assignments', JSON.stringify(finalSubjectAssignments));
+       data.append('subject_assignments', JSON.stringify(finalSubjectAssignments));
 
-      const response = await fetch('/api/teachers', {
-        method: 'POST',
-        body: data,
-      });
+       const response = await fetch('/api/teachers', {
+         method: 'POST',
+         body: data,
+       });
 
-      if (response.ok) {
-        setShowAddModal(false);
-        setEditingTeacher(null);
-        resetForm();
-        fetchTeachers();
-        alert('Teacher added successfully!');
-      } else {
-        const result = await response.json();
-        alert(result.error || 'Failed to add teacher');
-      }
-    } catch (error) {
-      console.error('Error adding teacher:', error);
-      alert('An error occurred. Please try again.');
-    }
-  };
+       if (response.ok) {
+         setShowAddModal(false);
+         setEditingTeacher(null);
+         resetForm();
+         fetchTeachers();
+         alert('Teacher added successfully!');
+       } else {
+         const result = await response.json();
+         alert(result.error || 'Failed to add teacher');
+       }
+     } catch (error) {
+       console.error('Error adding teacher:', error);
+       alert('An error occurred. Please try again.');
+     }
+   };
 
-  const handleEditTeacher = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingTeacher) return;
-    
-    try {
-      const data = new FormData();
-      data.append('full_name', formData.full_name);
-      data.append('teacher_code', formData.teacher_code);
-      data.append('email', formData.email);
-      data.append('role', formData.role === 'class_teacher' ? 'teacher' : formData.role);
-      data.append('phone', formData.phone);
-      data.append('gender', formData.gender);
-      
-      if (formData.role === 'class_teacher') {
-        data.append('is_class_teacher', 'true');
-        data.append('class_teacher_class_id', formData.class_id);
-        data.append('class_teacher_stream_id', formData.stream_id);
-      } else {
-        data.append('is_class_teacher', 'false');
-      }
+   const handleEditTeacher = async (e: React.FormEvent) => {
+     e.preventDefault();
+     if (!editingTeacher) return;
+     
+     try {
+       const data = new FormData();
+       data.append('full_name', formData.full_name);
+       data.append('teacher_code', formData.teacher_code);
+       data.append('email', formData.email);
+       data.append('role', formData.role === 'class_teacher' ? 'teacher' : formData.role);
+       data.append('phone', formData.phone);
+       data.append('gender', formData.gender);
+       
+       if (formData.role === 'class_teacher') {
+         data.append('is_class_teacher', 'true');
+         data.append('class_teacher_class_id', formData.class_id);
+         const isALevel = ['s5', 's6'].includes(formData.class_id.toLowerCase());
+         data.append('class_teacher_stream_id', isALevel ? '' : formData.stream_id);
+       } else {
+         data.append('is_class_teacher', 'false');
+       }
 
-      const finalSubjectAssignments = formData.role === 'class_teacher' && formData.class_id && formData.stream_id 
-        ? [
-            ...subjectAssignments,
-            {
-              subject_id: '',
-              class_id: formData.class_id,
-              stream_id: formData.stream_id
-            }
-          ]
-        : subjectAssignments;
+       const isALevel = ['s5', 's6'].includes(formData.class_id.toLowerCase());
+       const finalSubjectAssignments = formData.role === 'class_teacher' && formData.class_id
+         ? [
+             ...subjectAssignments,
+             {
+               subject_id: '',
+               class_id: formData.class_id,
+               stream_id: isALevel ? '' : formData.stream_id
+             }
+           ]
+         : subjectAssignments;
 
       data.append('subject_assignments', JSON.stringify(finalSubjectAssignments));
 
@@ -263,9 +267,8 @@ export default function TeachersManagement() {
     const isALevel = ['s5', 's6'].includes(classId);
     
     if (isOLevel) {
-      // Filter O-Level subjects by both 'o-' prefix AND class_id to prevent duplicates
       return subjects.filter(subject => 
-        subject.id.startsWith('o-') && subject.class_id === classId
+        (subject.id.startsWith('o-') || subject.id.startsWith('arabic-')) && subject.class_id === classId
       );
     } else if (isALevel) {
       return subjects.filter(subject => 
@@ -727,21 +730,23 @@ export default function TeachersManagement() {
                         ))}
                       </select>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Stream</label>
-                      <select 
-                        value={formData.stream_id}
-                        onChange={(e) => setFormData({ ...formData, stream_id: e.target.value })}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-900 focus:border-blue-900 text-gray-900"
-                        required
-                        disabled={!formData.class_id}
-                      >
-                        <option value="">Select Stream</option>
-                        {filteredStreams.map(s => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                    {!['s5', 's6'].includes(formData.class_id.toLowerCase()) && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Stream</label>
+                        <select 
+                          value={formData.stream_id}
+                          onChange={(e) => setFormData({ ...formData, stream_id: e.target.value })}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-900 focus:border-blue-900 text-gray-900"
+                          required
+                          disabled={!formData.class_id}
+                        >
+                          <option value="">Select Stream</option>
+                          {filteredStreams.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </>
                 )}
 

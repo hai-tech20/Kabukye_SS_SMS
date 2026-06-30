@@ -173,20 +173,20 @@ export async function PUT(
             .delete()
             .eq('teacher_id', id);
           
-          // Insert new subject assignments (filter out empty ones)
-          const validAssignments = subjectAssignments.filter(
-            (sa: any) => sa.subject_id && sa.class_id && sa.stream_id
-          );
-          console.log('PUT: Valid assignments to insert:', validAssignments);
-          
-          if (validAssignments.length > 0) {
-            const assignmentsToInsert = validAssignments.map((sa: any) => ({
-              id: `tsub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              teacher_id: id,
-              subject_id: sa.subject_id,
-              class_id: sa.class_id,
-              stream_id: sa.stream_id
-            }));
+           // Insert new subject assignments (filter out empty ones)
+           const validAssignments = subjectAssignments.filter(
+             (sa: any) => sa.subject_id && sa.class_id
+           );
+           console.log('PUT: Valid assignments to insert:', validAssignments);
+           
+           if (validAssignments.length > 0) {
+             const assignmentsToInsert = validAssignments.map((sa: any) => ({
+               id: `tsub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+               teacher_id: id,
+               subject_id: sa.subject_id,
+               class_id: sa.class_id,
+               stream_id: sa.stream_id || null
+             }));
             
             const { error: subjectError } = await supabaseAdmin
               .from('teacher_subjects')

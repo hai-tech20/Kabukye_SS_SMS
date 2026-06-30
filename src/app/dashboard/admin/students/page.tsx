@@ -59,6 +59,7 @@ export default function StudentsManagement() {
   const [studentDetailSubjects, setStudentDetailSubjects] = useState<any[]>([]);
   const [optional1, setOptional1] = useState('');
   const [optional2, setOptional2] = useState('');
+  const [optional3, setOptional3] = useState('');
   const [studentOptionalSubjects, setStudentOptionalSubjects] = useState<any[]>([]);
   
   // Photo upload state for edit mode
@@ -356,6 +357,13 @@ export default function StudentsManagement() {
               body: JSON.stringify({ student_id: studentId, subject_id: optional2 })
             });
           }
+          if ((modalClassId === 's1' || modalClassId === 's2') && optional3) {
+            await fetch('/api/student-optional-subjects', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ student_id: studentId, subject_id: optional3 })
+            });
+          }
         }
         
         // If A-Level student and subjects selected, assign them
@@ -400,6 +408,7 @@ export default function StudentsManagement() {
         setManualCombination('');
         setOptional1('');
         setOptional2('');
+        setOptional3('');
         fetchStudents();
         alert(result.message || 'Student added successfully');
       } else {
@@ -950,7 +959,7 @@ export default function StudentsManagement() {
                       {modalClassId && (modalClassId === 's1' || modalClassId === 's2' || modalClassId === 's3' || modalClassId === 's4') && (
                         <div className="col-span-2 border-t pt-4 mt-2">
                           <label className="block text-sm font-medium text-gray-900 mb-3">
-                            Select Optional Subjects <span className="text-gray-500">(up to 2)</span>
+                            Select Optional Subjects <span className="text-gray-500">(up to {modalClassId === 's1' || modalClassId === 's2' ? '3' : '2'})</span>
                           </label>
                           
                           {/* Optional Subject 1 */}
@@ -968,7 +977,7 @@ export default function StudentsManagement() {
                                   const selectedClassId = (modalClassId || '').toString().toLowerCase().trim();
                                   return subjectClassId === selectedClassId;
                                 })
-                                .filter(s => s.id !== optional2) // Don't show if already selected as optional2
+                                .filter(s => s.id !== optional2 && s.id !== optional3)
                                 .sort((a, b) => a.name.localeCompare(b.name))
                                 .map(s => (
                                   <option key={s.id} value={s.id}>{s.name}</option>
@@ -991,13 +1000,38 @@ export default function StudentsManagement() {
                                   const selectedClassId = (modalClassId || '').toString().toLowerCase().trim();
                                   return subjectClassId === selectedClassId;
                                 })
-                                .filter(s => s.id !== optional1) // Don't show if already selected as optional1
+                                .filter(s => s.id !== optional1 && s.id !== optional3)
                                 .sort((a, b) => a.name.localeCompare(b.name))
                                 .map(s => (
                                   <option key={s.id} value={s.id}>{s.name}</option>
                                 ))}
                             </select>
                           </div>
+
+                          {(modalClassId === 's1' || modalClassId === 's2') && (
+                            {/* Optional Subject 3 - S1/S2 only */}
+                            <div className="mb-3">
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Optional Subject 3</label>
+                              <select
+                                value={optional3}
+                                onChange={(e) => setOptional3(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-900 focus:border-blue-900 text-gray-900"
+                              >
+                                <option value="">-- None --</option>
+                                {subjects
+                                  .filter(s => {
+                                    const subjectClassId = (s.class_id || '').toString().toLowerCase().trim();
+                                    const selectedClassId = (modalClassId || '').toString().toLowerCase().trim();
+                                    return subjectClassId === selectedClassId;
+                                  })
+                                  .filter(s => s.id !== optional1 && s.id !== optional2)
+                                  .sort((a, b) => a.name.localeCompare(b.name))
+                                  .map(s => (
+                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                  ))}
+                              </select>
+                            </div>
+                          )}
                         </div>
                       )}
                       

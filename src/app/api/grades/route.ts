@@ -114,20 +114,23 @@ export async function GET(request: NextRequest) {
       const p1Mot = grade.p1_score ?? papers.find((p: any) => p.paper_number === 1 && p.assessment_type === 'MOT')?.score;
       const p2Mot = grade.p2_score ?? papers.find((p: any) => p.paper_number === 2 && p.assessment_type === 'MOT')?.score;
       const p3Mot = grade.p3_score ?? papers.find((p: any) => p.paper_number === 3 && p.assessment_type === 'MOT')?.score;
+      const p4Mot = grade.p4_score ?? papers.find((p: any) => p.paper_number === 4 && p.assessment_type === 'MOT')?.score;
       const p1Eot = grade.p1_eot_score ?? papers.find((p: any) => p.paper_number === 1 && p.assessment_type === 'EOT')?.score;
       const p2Eot = grade.p2_eot_score ?? papers.find((p: any) => p.paper_number === 2 && p.assessment_type === 'EOT')?.score;
       const p3Eot = grade.p3_eot_score ?? papers.find((p: any) => p.paper_number === 3 && p.assessment_type === 'EOT')?.score;
+      const p4Eot = grade.p4_eot_score ?? papers.find((p: any) => p.paper_number === 4 && p.assessment_type === 'EOT')?.score;
 
       return {
         ...grade,
         points,
-        // Prefer direct grade row fields, fallback to grade_papers rows if present.
         mot_p1: p1Mot,
         mot_p2: p2Mot,
         mot_p3: p3Mot,
+        mot_p4: p4Mot,
         eot_p1: p1Eot,
         eot_p2: p2Eot,
-        eot_p3: p3Eot
+        eot_p3: p3Eot,
+        eot_p4: p4Eot
       };
     });
 
@@ -298,6 +301,8 @@ export async function POST(request: NextRequest) {
         grade.eot_p2,
         grade.mot_p3,
         grade.eot_p3,
+        grade.mot_p4,
+        grade.eot_p4,
       ];
       for (const s of scoreFields) {
         if (s !== undefined && s !== null && s !== '') {
@@ -329,6 +334,12 @@ export async function POST(request: NextRequest) {
       }
       if (grade.eot_p3 !== undefined && grade.eot_p3 !== null) {
         paperScores.push({ number: 3, assessment_type: 'EOT', score: grade.eot_p3 });
+      }
+      if (grade.mot_p4 !== undefined && grade.mot_p4 !== null) {
+        paperScores.push({ number: 4, assessment_type: 'MOT', score: grade.mot_p4 });
+      }
+      if (grade.eot_p4 !== undefined && grade.eot_p4 !== null) {
+        paperScores.push({ number: 4, assessment_type: 'EOT', score: grade.eot_p4 });
       }
 
       // Calculate final score if both MOT and EOT exist

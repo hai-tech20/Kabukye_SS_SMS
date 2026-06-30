@@ -33,12 +33,15 @@ interface Mark {
   p1_score?: number | null;
   p2_score?: number | null;
   p3_score?: number | null;
+  p4_score?: number | null;
   mot_p1?: number | null;
   mot_p2?: number | null;
   mot_p3?: number | null;
+  mot_p4?: number | null;
   eot_p1?: number | null;
   eot_p2?: number | null;
   eot_p3?: number | null;
+  eot_p4?: number | null;
   subjects: {
     name: string;
     paper_count: number;
@@ -306,8 +309,8 @@ export default function StudentDashboard() {
                   <thead className="bg-gray-50">
                     <tr className="border-b border-gray-200">
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200" rowSpan={2}>Subject</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200" colSpan={3} style={{textAlign: 'center'}}>MOT</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200" colSpan={3} style={{textAlign: 'center'}}>EOT</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200" colSpan={4} style={{textAlign: 'center'}}>MOT</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-gray-200" colSpan={4} style={{textAlign: 'center'}}>EOT</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase text-center font-bold border-r border-gray-200" rowSpan={2}>Final Score</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" rowSpan={2}>Term / Year</th>
                     </tr>
@@ -315,9 +318,11 @@ export default function StudentDashboard() {
                       <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-r border-gray-200">P1</th>
                       <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-r border-gray-200">P2</th>
                       <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-r border-gray-200">P3</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-r border-gray-200">P4</th>
                       <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-r border-gray-200">P1</th>
                       <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-r border-gray-200">P2</th>
-                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">P3</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-r border-gray-200">P3</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">P4</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -332,9 +337,11 @@ export default function StudentDashboard() {
                           <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.mot_p1 ?? '-'}</td>
                           <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.mot_p2 ?? '-'}</td>
                           <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.mot_p3 ?? '-'}</td>
+                          <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.mot_p4 ?? '-'}</td>
                           <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.eot_p1 ?? '-'}</td>
                           <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.eot_p2 ?? '-'}</td>
                           <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600 border-r border-gray-200">{mark.eot_p3 ?? '-'}</td>
+                          <td className="px-3 py-4 whitespace-nowrap text-center text-sm text-gray-600">{mark.eot_p4 ?? '-'}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-center border-r border-gray-200">
                             <span className={`text-sm font-bold ${mark.final_score !== null && mark.final_score !== undefined ? 'text-blue-900' : 'text-gray-400'}`}>
                               {mark.final_score ?? '-'}%
@@ -346,11 +353,11 @@ export default function StudentDashboard() {
                         </tr>
                       ))
                     ) : (
-                      <tr>
-                        <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
-                          No marks have been entered for you yet.
-                        </td>
-                      </tr>
+                        <tr>
+                          <td colSpan={11} className="px-6 py-12 text-center text-gray-500">
+                            No marks have been entered for you yet.
+                          </td>
+                        </tr>
                     )}
                   </tbody>
                 </table>

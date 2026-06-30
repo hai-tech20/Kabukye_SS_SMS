@@ -6,6 +6,12 @@ import Link from 'next/link';
 import TeacherSidebar from '@/components/sidebar/TeacherSidebar';
 import { getCurrentTerm } from '@/lib/academic-calendar';
 
+type SidebarComponent = React.ComponentType<{ sidebarOpen: boolean; setSidebarOpen: (open: boolean) => void }>;
+
+interface GradesViewPageProps {
+  SidebarComponent?: SidebarComponent;
+}
+
 interface Student {
   id: string;
   full_name: string;
@@ -29,9 +35,10 @@ interface Subject {
   paper_count: number;
 }
 
-function GradesViewPage() {
+function GradesViewPage({ SidebarComponent }: GradesViewPageProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const Sidebar = SidebarComponent || TeacherSidebar;
   const [students, setStudents] = useState<Student[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [loading, setLoading] = useState(true);
@@ -329,7 +336,7 @@ function GradesViewPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar - Fixed Position */}
-      <TeacherSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+      <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
 
       {/* Main Content - Scrollable */}
       <div className={`flex-1 pt-16 lg:pt-0 min-h-screen transition-all duration-300 ${
