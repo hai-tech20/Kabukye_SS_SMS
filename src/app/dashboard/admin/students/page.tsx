@@ -676,7 +676,7 @@ export default function StudentsManagement() {
                     <p className="text-sm text-gray-500">{student.sms_classes?.name} - {student.sms_streams?.name}</p>
                   </div>
                 </div>
-<div className="flex items-center justify-between mt-3">
+                  <div className="flex items-center justify-between mt-3">
                    <span className={`px-2 py-1 rounded-full text-xs ${
                      student.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                    }`}>
@@ -1155,7 +1155,7 @@ export default function StudentsManagement() {
                             {/* Show loading while compressing */}
                             {photoLoading && (
                               <div className="mt-2 flex items-center gap-2 text-sm text-blue-600">
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"/>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
                                 <span>Compressing photo...</span>
                               </div>
                             )}
@@ -1169,7 +1169,7 @@ export default function StudentsManagement() {
                                   className="w-20 h-24 object-cover border border-gray-300 rounded"
                                 />
                                 <p className="text-xs text-green-600 mt-1">
-                                  ✓ Photo compressed and ready to upload
+                                  [OK] Photo compressed and ready to upload
                                 </p>
                               </div>
                             )}
