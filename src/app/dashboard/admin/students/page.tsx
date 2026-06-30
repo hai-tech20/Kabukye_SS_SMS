@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import Link from 'next/link';
 import AdminSidebar from '@/components/sidebar/AdminSidebar';
 import { compressStudentPhoto } from '@/lib/compressImage';
 
@@ -465,10 +464,12 @@ export default function StudentsManagement() {
     }
   };
 
-  const filteredStudents = students.filter((student) =>
-    student.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    student.schoolpay_code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredStudents = students.filter((student) => {
+    return (
+      student.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.schoolpay_code.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
