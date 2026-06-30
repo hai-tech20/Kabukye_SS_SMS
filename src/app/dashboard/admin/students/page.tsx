@@ -959,7 +959,7 @@ export default function StudentsManagement() {
                       {modalClassId && (modalClassId === 's1' || modalClassId === 's2' || modalClassId === 's3' || modalClassId === 's4') && (
                         <div className="col-span-2 border-t pt-4 mt-2">
                           <label className="block text-sm font-medium text-gray-900 mb-3">
-                            Select Optional Subjects <span className="text-gray-500">(up to {modalClassId === 's1' || modalClassId === 's2' ? '3' : '2'})</span>
+                            Select Optional Subjects <span className="text-gray-500">(up to {(modalClassId === 's1' || modalClassId === 's2') ? '3' : '2'})</span>
                           </label>
                           
                           {/* Optional Subject 1 */}
