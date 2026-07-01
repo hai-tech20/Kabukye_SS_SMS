@@ -301,7 +301,7 @@ export async function POST(request: NextRequest) {
                 .eq('subject_id', trimmedSubjectId)
                 .limit(1)
             );
-            isAllowed = subjectAssignment && subjectAssignment.length > 0;
+            isAllowed = !!subjectAssignment && subjectAssignment.length > 0;
           } else {
             // O-level: check normal stream/subject assignment
             const { data: assignment } = await withRetry(async () =>
@@ -314,7 +314,7 @@ export async function POST(request: NextRequest) {
                 .eq('subject_id', trimmedSubjectId)
                 .limit(1)
             );
-            isAllowed = assignment && assignment.length > 0;
+            isAllowed = !!assignment && assignment.length > 0;
           }
         } else {
           // Check if teacher is assigned to this class and subject (any stream!)
@@ -327,7 +327,7 @@ export async function POST(request: NextRequest) {
               .eq('subject_id', trimmedSubjectId)
               .limit(1)
           );
-          isAllowed = assignment && assignment.length > 0;
+          isAllowed = !!assignment && assignment.length > 0;
         }
 
         console.log('Grades API: Assignment check result:', isAllowed);
