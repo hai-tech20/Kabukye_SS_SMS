@@ -132,7 +132,7 @@ export const normalizeReportGrades = (grades: any[]): Grade[] => {
     if ((finalScore === null || finalScore === undefined) && 
         (motScore !== null && motScore !== undefined) && 
         (eotScore !== null && eotScore !== undefined)) {
-      finalScore = Math.round((motScore * 40 / 100) + (eotScore * 60 / 100));
+      finalScore = Math.round((motScore * 20 / 100) + (eotScore * 80 / 100));
     }
 
     // Calculate grade and descriptor if not present but final score exists
@@ -498,8 +498,8 @@ const ReportCardOLevel: React.FC<ReportCardOLevelProps> = (props) => {
         <thead>
           <tr>
             <th className="border border-gray-800 px-1 py-0.5 text-left font-bold">SUBJECT</th>
-            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">MOT [40%]</th>
-            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">EOT [60%]</th>
+            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">MOT [20%]</th>
+            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">EOT [80%]</th>
             <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">Final score</th>
             <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">Grade</th>
             <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">Descriptor</th>

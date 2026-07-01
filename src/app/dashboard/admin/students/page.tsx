@@ -464,19 +464,11 @@ export default function StudentsManagement() {
     }
   };
 
-  const filteredStudents = students.filter((student) => {
-    return (
-      student.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.schoolpay_code.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  });
+  const filteredStudents = students.filter((student) => student.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || student.schoolpay_code.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Sidebar - Fixed Position */}
       <AdminSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-
-      {/* Main Content - Scrollable */}
       <div className={`transition-all duration-300 pt-16 lg:pt-0 ${
         sidebarOpen ? 'lg:ml-64' : 'lg:ml-20'
       }`}>
@@ -488,7 +480,7 @@ export default function StudentsManagement() {
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">Admin User</span>
-              <button 
+              <button
                 onClick={() => window.location.href = '/api/auth/logout'}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
               >

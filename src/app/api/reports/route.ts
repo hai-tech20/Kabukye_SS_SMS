@@ -196,7 +196,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     const { data: settings, error: settingsError } = settingsResult;
-    const effectiveSettings = settings || { mot_weight: 40, eot_weight: 60 };
+    const effectiveSettings = settings || { mot_weight: 20, eot_weight: 80 };
 
     const { data: gradingScales } = gradingScalesResult;
     const { data: grades, error: gradesError } = gradesResult;

@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-  const Sidebar = SidebarComponent || TeacherSidebar;
 import TeacherSidebar from '@/components/sidebar/TeacherSidebar';
 import { getCurrentTerm } from '@/lib/academic-calendar';
 

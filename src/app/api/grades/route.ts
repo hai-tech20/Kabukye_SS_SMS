@@ -226,7 +226,7 @@ export async function POST(request: NextRequest) {
     // If settings are not configured, fall back to sensible defaults so teachers
     // can still save marks. This avoids blocking teachers when admin hasn't
     // created report settings for the term.
-    const effectiveSettings = settings || { mot_weight: 40, eot_weight: 60, assessment_count: 2, is_published: false };
+    const effectiveSettings = settings || { mot_weight: 20, eot_weight: 80, assessment_count: 2, is_published: false };
 
     const { data: gradingScales, error: scalesError } = await supabaseAdmin
       .from('grading_scales')
