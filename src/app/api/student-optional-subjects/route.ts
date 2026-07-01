@@ -153,20 +153,29 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const auth = await requireSession();
+    if (auth instanceof NextResponse) return auth;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
+    const student_id = searchParams.get('student_id');
 
-    if (!id) {
+    if (!id && !student_id) {
       return NextResponse.json(
-        { error: 'id is required' },
+        { error: 'id or student_id is required' },
         { status: 400 }
       );
     }
 
-    const { error } = await supabaseAdmin
-      .from('student_optional_subjects')
-      .delete()
-      .eq('id', id);
+    const { error } = student_id
+      ? await supabaseAdmin
+          .from('student_optional_subjects')
+          .delete()
+          .eq('student_id', student_id)
+      : await supabaseAdmin
+          .from('student_optional_subjects')
+          .delete()
+          .eq('id', id!);
 
     if (error) {
       console.error('Error deleting optional subject:', error);

@@ -3,94 +3,91 @@ import { withRetry } from './retry';
 
 export { withRetry };
 
+// Placeholders allow `next build` in Docker when runtime secrets are not injected yet.
+const PLACEHOLDER_URL = 'https://placeholder.supabase.co';
+const PLACEHOLDER_SERVICE_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIn0.placeholder-service-role-key';
+const PLACEHOLDER_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIn0.placeholder-anon-key';
+
+function getSupabaseUrl(): string {
+  return process.env.NEXT_PUBLIC_SUPABASE_URL || PLACEHOLDER_URL;
+}
+
+function getServiceRoleKey(): string {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY || PLACEHOLDER_SERVICE_KEY;
+}
+
+function getAnonKey(): string {
+  return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || PLACEHOLDER_ANON_KEY;
+}
+
+const sharedFetch = (url: RequestInfo | URL, init?: RequestInit) =>
+  fetch(url, {
+    ...init,
+    signal: AbortSignal.timeout(30000),
+  });
+
 export const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  getSupabaseUrl(),
+  getServiceRoleKey(),
   {
-    db: {
-      schema: 'sms'
-    },
+    db: { schema: 'sms' },
     global: {
-      headers: {
-        'Connection': 'keep-alive'
-      },
-      fetch: (url: RequestInfo | URL, init?: RequestInit) => {
-        return fetch(url, {
-          ...init,
-          // Increase timeout to 30 seconds
-          signal: AbortSignal.timeout(30000)
-        });
-      }
+      headers: { Connection: 'keep-alive' },
+      fetch: sharedFetch,
     },
-    auth: {
-      persistSession: false
-    }
+    auth: { persistSession: false },
   }
 );
 
 export const supabaseBrowser = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  getSupabaseUrl(),
+  getAnonKey(),
   {
-    db: {
-      schema: 'sms'
-    },
+    db: { schema: 'sms' },
     global: {
-      headers: {
-        'Connection': 'keep-alive'
-      }
-    }
+      headers: { Connection: 'keep-alive' },
+    },
   }
 );
 
 // Public schema client for website posts and applications (server-side only)
 export const supabasePublic = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  getSupabaseUrl(),
+  getServiceRoleKey(),
   {
-    // No schema option = defaults to public schema
     global: {
-      headers: {
-        'Connection': 'keep-alive'
-      },
-      fetch: (url: RequestInfo | URL, init?: RequestInit) => {
-        return fetch(url, {
-          ...init,
-          signal: AbortSignal.timeout(30000)
-        });
-      }
+      headers: { Connection: 'keep-alive' },
+      fetch: sharedFetch,
     },
-    auth: {
-      persistSession: false
-    }
+    auth: { persistSession: false },
   }
 );
 
 // Cached fetch helper with stale-while-revalidate pattern
-const cache = new Map<string, { data: any; timestamp: number; ttl: number }>();
+const cache = new Map<string, { data: unknown; timestamp: number; ttl: number }>();
 
 export async function fetchWithCache<T>(
   key: string,
   fn: () => Promise<T>,
-  ttlMs = 60000 // Default 1 minute cache
+  ttlMs = 60000
 ): Promise<T> {
   const now = Date.now();
   const cached = cache.get(key);
-  
-  // Return fresh cache immediately
+
   if (cached && now - cached.timestamp < cached.ttl) {
-    return cached.data;
+    return cached.data as T;
   }
-  
+
   try {
     const data = await fn();
     cache.set(key, { data, timestamp: now, ttl: ttlMs });
     return data;
   } catch (error) {
-    // If fetch fails but we have stale cache, return it
     if (cached) {
       console.log(`[fetchWithCache] Fetch failed, returning stale cache for key: ${key}`);
-      return cached.data;
+      return cached.data as T;
     }
     throw error;
   }

@@ -26,6 +26,23 @@ import {
   type AcademicTerm,
 } from '@/components/reports/report-card';
 
+const CLASS_SORT_ORDER: Record<string, number> = { S1: 1, S2: 2, S3: 3, S4: 4, S5: 5, S6: 6 };
+
+function getStudentClassSortKey(className: string): number {
+  const match = className?.match(/^(S[1-6])/i);
+  return match ? CLASS_SORT_ORDER[match[1].toUpperCase()] ?? 99 : 99;
+}
+
+function sortStudentsForReports(list: Student[]): Student[] {
+  return [...list].sort((a, b) => {
+    const classDiff = getStudentClassSortKey(a.class) - getStudentClassSortKey(b.class);
+    if (classDiff !== 0) return classDiff;
+    const streamDiff = (a.stream || '').localeCompare(b.stream || '', undefined, { numeric: true });
+    if (streamDiff !== 0) return streamDiff;
+    return a.full_name.localeCompare(b.full_name);
+  });
+}
+
 export default function ReportsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [students, setStudents] = useState<Student[]>([]);
@@ -63,6 +80,8 @@ export default function ReportsPage() {
   const [previewComments, setPreviewComments] = useState<{ class_teacher_comment?: string; head_teacher_comment?: string } | null>(null);
   const [previewAcademicTerm, setPreviewAcademicTerm] = useState<AcademicTerm | null>(null);
   const [printAllReports, setPrintAllReports] = useState(false);
+  const [printAllLoading, setPrintAllLoading] = useState(false);
+  const pdfStudentListRef = useRef<Student[]>([]);
 
   useEffect(() => {
     fetchClassesAndStreams();
@@ -460,14 +479,33 @@ export default function ReportsPage() {
     window.print();
   };
 
-  const handlePrintAll = () => {
-    setPrintAllReports(true);
-    setTimeout(() => {
+  const handlePrintAll = async () => {
+    if (students.length === 0) {
+      alert('No students to print!');
+      return;
+    }
+
+    const sorted = sortStudentsForReports(students);
+    setPrintAllLoading(true);
+
+    try {
+      await prefetchSubjectDataForStudents(sorted);
+      setPrintAllReports(true);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const container = document.querySelector('.print-all-container') as HTMLElement | null;
+      if (container) {
+        await waitForImages(container);
+      }
       window.print();
+    } catch (error) {
+      console.error('Print all failed:', error);
+      alert('Failed to prepare reports for printing.');
+    } finally {
       setTimeout(() => {
         setPrintAllReports(false);
+        setPrintAllLoading(false);
       }, 500);
-    }, 100);
+    }
   };
 
   const handleClosePreview = () => {
@@ -559,11 +597,13 @@ export default function ReportsPage() {
 
     setPdfGenerating(true);
 
+    const sortedStudents = sortStudentsForReports(students);
+    pdfStudentListRef.current = sortedStudents;
+
     try {
       console.log('Starting PDF generation...');
-      await prefetchSubjectDataForStudents(students);
+      await prefetchSubjectDataForStudents(sortedStudents);
 
-      // Create PDF
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -571,44 +611,60 @@ export default function ReportsPage() {
       });
 
       const pageWidth = pdf.internal.pageSize.getWidth();
+      let pagesAdded = 0;
 
-      // Process each student one at a time
-      for (let i = 0; i < students.length; i++) {
-        console.log(`Processing student ${i + 1}/${students.length}`);
-        
-        // Render current student with flushSync to force immediate update
+      for (let i = 0; i < sortedStudents.length; i++) {
+        console.log(`Processing student ${i + 1}/${sortedStudents.length}`);
+
         flushSync(() => {
           setPdfCurrentStudentIndex(i);
         });
-        
-        // Wait for React to render and images to load
+
         await new Promise(resolve => setTimeout(resolve, 150));
-        
-        // Get the report card element
+
         const reportCardElement = pdfContainerRef.current?.querySelector('.pdf-report-card') as HTMLElement;
         if (!reportCardElement) continue;
 
         await waitForImages(reportCardElement);
-        
-        const canvas = await html2canvas(reportCardElement, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-          allowTaint: true,
-          imageTimeout: 15000,
-          ignoreElements: (element) => element.tagName === 'SCRIPT',
-        });
-        
-        const imgData = canvas.toDataURL('image/jpeg', 0.92);
-        
-        // Add new page if not first
-        if (i > 0) {
-          pdf.addPage();
+
+        try {
+          const canvas = await Promise.race([
+            html2canvas(reportCardElement, {
+              scale: 1.25,
+              useCORS: true,
+              backgroundColor: '#ffffff',
+              logging: false,
+              allowTaint: true,
+              imageTimeout: 8000,
+              ignoreElements: (element) => element.tagName === 'SCRIPT',
+            }),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Capture timed out')), 45000)
+            ),
+          ]);
+
+          const imgData = canvas.toDataURL('image/jpeg', 0.92);
+
+          if (pagesAdded > 0) {
+            pdf.addPage();
+          }
+          pagesAdded++;
+
+          const imgHeight = (canvas.height * pageWidth) / canvas.width;
+          pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, imgHeight);
+
+          canvas.width = 0;
+          canvas.height = 0;
+        } catch (studentError) {
+          console.error(`Failed to capture report for ${sortedStudents[i].full_name}:`, studentError);
         }
-        
-        const imgHeight = (canvas.height * pageWidth) / canvas.width;
-        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, imgHeight);
+
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      if (pagesAdded === 0) {
+        alert('No report cards could be generated. Check console for details.');
+        return;
       }
 
       console.log('PDF generated, downloading...');
@@ -630,17 +686,11 @@ export default function ReportsPage() {
     <div className="h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex overflow-hidden relative">
       {/* Print-only content (always at top level) */}
       {printAllReports && (
-        <div className="print-only absolute top-0 left-0 w-full bg-white p-0">
-          {students.map((student) => {
-            const classLevel = getClassLevel(student.class);
-            let optionalSubjectsForStudent: Array<{ id: string; name: string }> = [];
-            let assignedSubjectsForStudent: Array<{ id: string; subject_id?: string; name: string; subject_type: string }> = [];
-            
-            if (classLevel === 'S1-S2' || classLevel === 'S3-S4') {
-              optionalSubjectsForStudent = previewOptionalSubjects;
-            } else {
-              assignedSubjectsForStudent = previewAssignedSubjects;
-            }
+        <div className="print-only absolute top-0 left-0 w-full bg-white p-0 print-all-container">
+          {sortStudentsForReports(students).map((student) => {
+            const cachedSubjects = studentSubjectDataCache.current.get(student.id);
+            const optionalSubjectsForStudent = cachedSubjects?.optionalSubjects || [];
+            const assignedSubjectsForStudent = cachedSubjects?.assignedSubjects || [];
 
             return (
               <div key={student.id}>
@@ -799,13 +849,24 @@ export default function ReportsPage() {
               <div className="flex space-x-3 flex-wrap">
                 <button
                   onClick={handlePrintAll}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-md font-bold"
-                  disabled={pdfGenerating}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-md font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={pdfGenerating || printAllLoading}
                 >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                  </svg>
-                  Print All Reports
+                  {printAllLoading ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Preparing...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                      Print All Reports
+                    </>
+                  )}
                 </button>
                 <button
                   onClick={generatePDF}
@@ -818,7 +879,7 @@ export default function ReportsPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
                       {pdfCurrentStudentIndex >= 0 
-                        ? `Generating PDF (${pdfCurrentStudentIndex + 1}/${students.length})` 
+                        ? `Generating PDF (${pdfCurrentStudentIndex + 1}/${pdfStudentListRef.current.length || students.length})` 
                         : 'Generating PDF...'}
                     </>
                   ) : (
@@ -973,8 +1034,8 @@ export default function ReportsPage() {
               overflow: 'visible'
             }}
           >
-            {pdfCurrentStudentIndex >= 0 && students[pdfCurrentStudentIndex] && (() => {
-              const student = students[pdfCurrentStudentIndex];
+            {pdfCurrentStudentIndex >= 0 && pdfStudentListRef.current[pdfCurrentStudentIndex] && (() => {
+              const student = pdfStudentListRef.current[pdfCurrentStudentIndex];
               const cachedSubjects = studentSubjectDataCache.current.get(student.id);
               const optionalSubjectsForStudent = cachedSubjects?.optionalSubjects || [];
               const assignedSubjectsForStudent = cachedSubjects?.assignedSubjects || [];

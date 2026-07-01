@@ -28,6 +28,17 @@ interface Subject {
   class_id: string;
 }
 
+const O_LEVEL_CLASSES = ['s1', 's2', 's3', 's4'];
+const A_LEVEL_CLASSES = ['s5', 's6'];
+
+function isOLevelClass(classId: string) {
+  return O_LEVEL_CLASSES.includes((classId || '').toLowerCase());
+}
+
+function isALevelClass(classId: string) {
+  return A_LEVEL_CLASSES.includes((classId || '').toLowerCase());
+}
+
 export default function StudentsManagement() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [students, setStudents] = useState<Student[]>([]);
@@ -91,8 +102,6 @@ export default function StudentsManagement() {
       const params = new URLSearchParams();
       if (selectedClassId) params.append('class_id', selectedClassId);
       if (selectedStreamId) params.append('stream_id', selectedStreamId);
-      // Add cache-busting timestamp
-      params.append('t', Date.now().toString());
 
       const response = await fetch(`/api/students?${params.toString()}`, {
         cache: 'no-store',
@@ -246,6 +255,58 @@ export default function StudentsManagement() {
     }
   }, []);
 
+  const fetchStudentOptionalSubjectsForView = useCallback(async (studentId: string) => {
+    try {
+      const response = await fetch(`/api/student-optional-subjects?student_id=${studentId}`);
+      const result = await response.json();
+      if (response.ok && result.data) {
+        const sorted = [...result.data].sort((a: any, b: any) =>
+          new Date(a.assigned_at || 0).getTime() - new Date(b.assigned_at || 0).getTime()
+        );
+        setStudentOptionalSubjects(sorted);
+      } else {
+        setStudentOptionalSubjects([]);
+      }
+    } catch (error) {
+      console.error('Error fetching student optional subjects:', error);
+      setStudentOptionalSubjects([]);
+    }
+  }, []);
+
+  const fetchStudentOptionalSubjectsForEdit = useCallback(async (studentId: string) => {
+    try {
+      const response = await fetch(`/api/student-optional-subjects?student_id=${studentId}`);
+      const result = await response.json();
+      if (response.ok && result.data) {
+        const sorted = [...result.data].sort((a: any, b: any) =>
+          new Date(a.assigned_at || 0).getTime() - new Date(b.assigned_at || 0).getTime()
+        );
+        setOptional1(sorted[0]?.subject_id || '');
+        setOptional2(sorted[1]?.subject_id || '');
+        setOptional3(sorted[2]?.subject_id || '');
+      } else {
+        setOptional1('');
+        setOptional2('');
+        setOptional3('');
+      }
+    } catch (error) {
+      console.error('Error fetching student optional subjects for edit:', error);
+    }
+  }, []);
+
+  const openStudentDetails = useCallback((student: Student) => {
+    setSelectedStudent(student);
+    setStudentDetailSubjects([]);
+    setStudentOptionalSubjects([]);
+    const classId = (student.class_id || '').toLowerCase();
+    if (isALevelClass(classId)) {
+      fetchStudentDetailSubjects(student.id);
+    } else if (isOLevelClass(classId)) {
+      fetchStudentOptionalSubjectsForView(student.id);
+    }
+    setShowDetailsModal(true);
+  }, [fetchStudentDetailSubjects, fetchStudentOptionalSubjectsForView]);
+
   // Fetch subjects when modal opens - MUST be defined before useEffect that uses it
   const fetchSubjects = useCallback(async () => {
     try {
@@ -290,11 +351,15 @@ export default function StudentsManagement() {
       // Fetch subjects first, then fetch student subjects
       // We need to ensure subjects are loaded before setting the dropdown values
       fetchSubjects().then(() => {
-        // After subjects are loaded, fetch and set the student's subjects
-        fetchStudentSubjects(editingStudent.id);
+        const classId = (editingStudent.class_id || '').toLowerCase();
+        if (isALevelClass(classId)) {
+          fetchStudentSubjects(editingStudent.id);
+        } else if (isOLevelClass(classId)) {
+          fetchStudentOptionalSubjectsForEdit(editingStudent.id);
+        }
       });
     }
-  }, [editingStudent, handleModalClassChange, fetchStudentSubjects, fetchSubjects]);
+  }, [editingStudent, handleModalClassChange, fetchStudentSubjects, fetchStudentOptionalSubjectsForEdit, fetchSubjects]);
 
   // Fetch subjects when modal opens
   useEffect(() => {
@@ -310,6 +375,9 @@ export default function StudentsManagement() {
       setPrincipal2('');
       setPrincipal3('');
       setSubsidiary('');
+      setOptional1('');
+      setOptional2('');
+      setOptional3('');
       setManualCombination('');
     }
   }, [showAddModal, editingStudent]);
@@ -430,10 +498,31 @@ export default function StudentsManagement() {
       });
       
       if (response.ok) {
+        const classId = (editingStudent.class_id || '').toLowerCase();
+        if (isOLevelClass(classId)) {
+          await fetch(`/api/student-optional-subjects?student_id=${editingStudent.id}`, {
+            method: 'DELETE',
+          });
+          const optionals = [optional1, optional2];
+          if (classId === 's1' || classId === 's2') {
+            optionals.push(optional3);
+          }
+          for (const subjectId of optionals.filter(Boolean)) {
+            await fetch('/api/student-optional-subjects', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ student_id: editingStudent.id, subject_id: subjectId }),
+            });
+          }
+        }
+
         setEditingStudent(null);
         setModalClassId('');
         setModalStreamId('');
         setModalStreams([]);
+        setOptional1('');
+        setOptional2('');
+        setOptional3('');
         fetchStudents();
         alert('Student updated successfully');
       } else {
@@ -588,11 +677,7 @@ export default function StudentsManagement() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         <button
-                          onClick={() => {
-                            setSelectedStudent(student);
-                            fetchStudentDetailSubjects(student.id);
-                            setShowDetailsModal(true);
-                          }}
+                          onClick={() => openStudentDetails(student)}
                           className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
                         >
                           {student.full_name}
@@ -677,11 +762,7 @@ export default function StudentsManagement() {
                    </span>
                    <div className="flex gap-3">
                      <button 
-                       onClick={() => {
-                         setSelectedStudent(student);
-                         fetchStudentDetailSubjects(student.id);
-                         setShowDetailsModal(true);
-                       }}
+                       onClick={() => openStudentDetails(student)}
                        className="text-blue-900 text-sm font-medium"
                      >
                        View
@@ -1210,6 +1291,8 @@ export default function StudentsManagement() {
                       onClick={() => {
                         setShowDetailsModal(false);
                         setSelectedStudent(null);
+                        setStudentDetailSubjects([]);
+                        setStudentOptionalSubjects([]);
                       }}
                       className="text-gray-400 hover:text-gray-600"
                     >
@@ -1285,8 +1368,8 @@ export default function StudentsManagement() {
                       )}
                     </div>
 
-                    {/* Subjects Information - Only for A-Level students */}
-                    {(selectedStudent.class_id === 's5' || selectedStudent.class_id === 's6') && studentDetailSubjects.length > 0 && (
+                    {/* Subjects Information - A-Level students */}
+                    {isALevelClass(selectedStudent.class_id) && studentDetailSubjects.length > 0 && (
                       <div className="border-t pt-4">
                         <h4 className="text-md font-medium text-gray-900 mb-3">Subjects</h4>
                         <div className="space-y-2">
@@ -1301,6 +1384,25 @@ export default function StudentsManagement() {
                                   : 'bg-green-100 text-green-800'
                               }`}>
                                 {subject.is_principal ? 'Principal' : 'Subsidiary'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Optional Subjects - O-Level students (S1-S4) */}
+                    {isOLevelClass(selectedStudent.class_id) && studentOptionalSubjects.length > 0 && (
+                      <div className="border-t pt-4">
+                        <h4 className="text-md font-medium text-gray-900 mb-3">Optional Subjects</h4>
+                        <div className="space-y-2">
+                          {studentOptionalSubjects.map((subject: any, index: number) => (
+                            <div key={subject.id} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded">
+                              <span className="text-sm text-gray-700">
+                                {index + 1}. {subject.subjects?.name || 'Unknown Subject'}
+                              </span>
+                              <span className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-800">
+                                Optional
                               </span>
                             </div>
                           ))}
