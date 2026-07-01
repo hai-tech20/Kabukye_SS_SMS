@@ -719,8 +719,8 @@ const ReportCardS5S6: React.FC<ReportCardS5S6Props> = (props) => {
         <thead>
           <tr>
             <th className="border border-gray-800 px-1.5 py-1 text-left font-bold">SUBJECT</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold">MOT [40%]</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold">EOT [60%]</th>
+            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">MOT [20%]</th>
+            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">EOT [80%]</th>
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold">Final score</th>
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold">Grade</th>
             <th className="border border-gray-800 px-1.5 py-1 text-center font-bold">Points</th>
