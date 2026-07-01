@@ -194,6 +194,24 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check max number of optional subjects based on class
+    const { data: currentOptionals, error: countError } = await supabaseAdmin
+      .from('student_optional_subjects')
+      .select('id')
+      .eq('student_id', student_id);
+      
+    const currentCount = (currentOptionals || []).length;
+    const studentClassId = studentData.class_id?.toLowerCase().trim();
+    const isS1S2 = studentClassId === 's1' || studentClassId === 's2';
+    const maxOptionals = isS1S2 ? 3 : 2;
+    
+    if (currentCount >= maxOptionals) {
+      return NextResponse.json(
+        { error: `Maximum ${maxOptionals} optional subjects allowed for ${studentClassId.toUpperCase()}` },
+        { status: 400 }
+      );
+    }
+
     // Insert the optional subject
     const { data, error } = await supabaseAdmin
       .from('student_optional_subjects')

@@ -91,6 +91,30 @@ export async function POST(request: Request) {
       .eq('subject_id', subject_id)
       .single();
 
+    // Check max allowed optional subjects
+    const { data: currentOptionals } = await supabaseAdmin
+      .from('student_optional_subjects')
+      .select('id')
+      .eq('student_id', student_id);
+    
+    const { data: studentData } = await supabaseAdmin
+      .from('students')
+      .select('class_id')
+      .eq('id', student_id)
+      .single();
+
+    const currentCount = (currentOptionals || []).length;
+    const studentClassId = studentData?.class_id?.toLowerCase().trim();
+    const isS1S2 = studentClassId === 's1' || studentClassId === 's2';
+    const maxOptionals = isS1S2 ? 3 : 2;
+    
+    if (currentCount >= maxOptionals) {
+      return NextResponse.json(
+        { error: `Maximum ${maxOptionals} optional subjects allowed for ${studentClassId?.toUpperCase() || 'S1-S4'}` },
+        { status: 400 }
+      );
+    }
+
     if (existing) {
       return NextResponse.json(
         { error: 'Subject already assigned to student' },
