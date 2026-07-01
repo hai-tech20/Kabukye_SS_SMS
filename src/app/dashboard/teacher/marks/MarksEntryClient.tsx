@@ -68,7 +68,8 @@ export default function MarksEntryClient({
   initialStreams,
   initialSubjects,
   teacherId,
-  error: initialError
+  error: initialError,
+  SidebarComponent
 }: MarksEntryClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
