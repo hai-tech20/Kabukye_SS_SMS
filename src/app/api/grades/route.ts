@@ -274,17 +274,65 @@ export async function POST(request: NextRequest) {
           subject_id_length: a.subject_id?.length
         })));
         
-        // Check if teacher is assigned to this class and subject (any stream!)
-        const { data: assignment } = await supabaseAdmin
-          .from('teacher_subjects')
-          .select('id')
-          .eq('teacher_id', trimmedTeacherId)
-          .eq('class_id', trimmedClassId)
-          .eq('subject_id', trimmedSubjectId)
-          .limit(1);
-        console.log('Grades API: Assignment check result (any stream):', assignment);
-        
-        if (!assignment?.length) {
+        // First check if teacher is a class teacher for this class
+        const { data: teacherData } = await withRetry(async () =>
+          await supabaseAdmin
+            .from('teachers')
+            .select('id, is_class_teacher, class_teacher_class_id, class_teacher_stream_id')
+            .eq('id', trimmedTeacherId)
+            .single()
+        );
+
+        const isClassTeacher = !!teacherData?.is_class_teacher;
+        const classTeacherClassId = teacherData?.class_teacher_class_id?.toLowerCase().trim();
+        const isALevelClassTeacher = isClassTeacher && (classTeacherClassId === 's5' || classTeacherClassId === 's6');
+
+        let isAllowed = false;
+
+        if (isClassTeacher && classTeacherClassId === trimmedClassId) {
+          if (isALevelClassTeacher) {
+            // Allow any stream for A-level class teachers, check subject assignment
+            const { data: subjectAssignment } = await withRetry(async () =>
+              await supabaseAdmin
+                .from('teacher_subjects')
+                .select('id')
+                .eq('teacher_id', trimmedTeacherId)
+                .eq('class_id', trimmedClassId)
+                .eq('subject_id', trimmedSubjectId)
+                .limit(1)
+            );
+            isAllowed = subjectAssignment && subjectAssignment.length > 0;
+          } else {
+            // O-level: check normal stream/subject assignment
+            const { data: assignment } = await withRetry(async () =>
+              await supabaseAdmin
+                .from('teacher_subjects')
+                .select('id')
+                .eq('teacher_id', trimmedTeacherId)
+                .eq('class_id', trimmedClassId)
+                .eq('stream_id', trimmedStreamId)
+                .eq('subject_id', trimmedSubjectId)
+                .limit(1)
+            );
+            isAllowed = assignment && assignment.length > 0;
+          }
+        } else {
+          // Check if teacher is assigned to this class and subject (any stream!)
+          const { data: assignment } = await withRetry(async () =>
+            await supabaseAdmin
+              .from('teacher_subjects')
+              .select('id')
+              .eq('teacher_id', trimmedTeacherId)
+              .eq('class_id', trimmedClassId)
+              .eq('subject_id', trimmedSubjectId)
+              .limit(1)
+          );
+          isAllowed = assignment && assignment.length > 0;
+        }
+
+        console.log('Grades API: Assignment check result:', isAllowed);
+
+        if (!isAllowed) {
           return NextResponse.json(
             { error: 'You are not assigned to this class, stream, and subject.' },
             { status: 403 }
@@ -382,7 +430,36 @@ export async function POST(request: NextRequest) {
 
       const existingGrade = existingGrades && existingGrades.length > 0 ? existingGrades[0] : null;
 
-      // Prepare the data - generate an id for new grades, trim everything, ensure text fields are strings
+      // Check if all scores are null/undefined - if so, delete the grade
+      const allScoresNull = 
+        (motScore === null || motScore === undefined) &&
+        (eotScore === null || eotScore === undefined) &&
+        (grade.mot_p1 === null || grade.mot_p1 === undefined) &&
+        (grade.eot_p1 === null || grade.eot_p1 === undefined) &&
+        (grade.mot_p2 === null || grade.mot_p2 === undefined) &&
+        (grade.eot_p2 === null || grade.eot_p2 === undefined) &&
+        (grade.mot_p3 === null || grade.mot_p3 === undefined) &&
+        (grade.eot_p3 === null || grade.eot_p3 === undefined) &&
+        (grade.mot_p4 === null || grade.mot_p4 === undefined) &&
+        (grade.eot_p4 === null || grade.eot_p4 === undefined);
+
+      if (allScoresNull && existingGrade) {
+        // Delete the grade entirely
+        console.log(`Grades API: Deleting grade for student ${grade.student_id} because all scores are null`);
+        const { error: deleteError } = await withRetry(async () =>
+          await supabaseAdmin
+            .from('grades')
+            .delete()
+            .eq('id', existingGrade.id)
+        );
+        if (deleteError) {
+          console.error('Grades API: Error deleting grade:', deleteError);
+        }
+        // Skip to next grade - no need to save paper scores
+        continue;
+      }
+
+      // Prepare the data - include null values for fields we want to clear
       const upsertData: any = {
         id: existingGrade ? existingGrade.id : `grade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         student_id: String(grade.student_id).trim(),
@@ -392,20 +469,16 @@ export async function POST(request: NextRequest) {
         stream_id: String(grade.stream_id).trim(),
         term: String(grade.term).trim(),
         academic_year: String(grade.academic_year).trim(),
+        mot_score: motScore === null ? null : motScore,
+        eot_score: eotScore === null ? null : eotScore,
+        final_score: finalScore === null ? null : finalScore,
+        grade: gradeLabel === null ? null : gradeLabel,
+        descriptor: descriptor === null ? null : descriptor,
         updated_at: new Date().toISOString()
       };
 
       if (!existingGrade) {
         upsertData.created_at = new Date().toISOString();
-      }
-      
-      // Only include scores if they exist
-      if (motScore !== undefined && motScore !== null) upsertData.mot_score = motScore;
-      if (eotScore !== undefined && eotScore !== null) upsertData.eot_score = eotScore;
-      if (finalScore !== null) upsertData.final_score = finalScore;
-      if (gradeLabel !== null) {
-        upsertData.grade = gradeLabel;
-        upsertData.descriptor = descriptor;
       }
 
       console.log(`Grades API: ${existingGrade ? 'Updating' : 'Creating'} grade for student ${grade.student_id}`);
@@ -427,16 +500,18 @@ export async function POST(request: NextRequest) {
         upsertedGrade = data && data.length > 0 ? data[0] : null;
         gradeError = error;
       } else {
-        // Insert new grade
-        const { data, error } = await withRetry(async () =>
-          await supabaseAdmin
-            .from('grades')
-            .insert(upsertData)
-            .select()
-        );
-        console.log("Grades API: Insert response:", data, "Error:", error);
-        upsertedGrade = data && data.length > 0 ? data[0] : null;
-        gradeError = error;
+        // Insert new grade only if there are some scores
+        if (!allScoresNull) {
+          const { data, error } = await withRetry(async () =>
+            await supabaseAdmin
+              .from('grades')
+              .insert(upsertData)
+              .select()
+          );
+          console.log("Grades API: Insert response:", data, "Error:", error);
+          upsertedGrade = data && data.length > 0 ? data[0] : null;
+          gradeError = error;
+        }
       }
 
       if (gradeError) {

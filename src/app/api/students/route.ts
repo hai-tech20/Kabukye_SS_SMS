@@ -148,6 +148,15 @@ export async function GET(request: NextRequest) {
 
     // If user is teacher, restrict to their assigned classes and streams
     if (session?.role === 'teacher') {
+      // First check if the teacher is a class teacher
+      const { data: teacherData } = await withRetry(async () =>
+        await supabaseAdmin
+          .from('teachers')
+          .select('id, is_class_teacher, class_teacher_class_id, class_teacher_stream_id')
+          .eq('id', session.id)
+          .single()
+      );
+
       const { data: teacherAssignments } = await withRetry(async () =>
         await supabaseAdmin
           .from('teacher_subjects')
@@ -155,9 +164,52 @@ export async function GET(request: NextRequest) {
           .eq('teacher_id', session.id)
       );
 
-      if (teacherAssignments && teacherAssignments.length > 0) {
-        // Build OR conditions for each (class_id, stream_id) pair
-        // Handle null stream_id as "all streams for this class"
+      const isClassTeacher = !!teacherData?.is_class_teacher;
+      const classTeacherClassId = teacherData?.class_teacher_class_id?.toLowerCase().trim();
+      const isALevelClassTeacher = isClassTeacher && (classTeacherClassId === 's5' || classTeacherClassId === 's6');
+
+      if (isClassTeacher && classTeacherClassId) {
+        // If it's an A-level class teacher, allow all streams for that class
+        if (isALevelClassTeacher) {
+          console.log(`Students API: A-level class teacher for ${classTeacherClassId}, allowing all streams`);
+          // Add the class teacher class to the or conditions
+          let orConditions = [`class_id.eq.${classTeacherClassId}`];
+          
+          if (teacherAssignments && teacherAssignments.length > 0) {
+            orConditions = orConditions.concat(
+              teacherAssignments
+                .filter((a: any) => a.class_id)
+                .map((a: any) => {
+                  if (a.stream_id) {
+                    return `and(class_id.eq.${a.class_id},stream_id.eq.${a.stream_id})`;
+                  } else {
+                    return `class_id.eq.${a.class_id}`;
+                  }
+                })
+            );
+          }
+          const uniqueOrConditions = Array.from(new Set(orConditions)).join(',');
+          console.log(`Students API: OR conditions including class teacher access:`, uniqueOrConditions);
+          query = query.or(uniqueOrConditions);
+        } else {
+          // O-level class teacher: follow normal logic
+          if (teacherAssignments && teacherAssignments.length > 0) {
+            const orConditions = teacherAssignments
+              .filter((a: any) => a.class_id)
+              .map((a: any) => {
+                if (a.stream_id) {
+                  return `and(class_id.eq.${a.class_id},stream_id.eq.${a.stream_id})`;
+                } else {
+                  return `class_id.eq.${a.class_id}`;
+                }
+              })
+              .join(',');
+            console.log(`Students API: O-level class teacher, OR conditions:`, orConditions);
+            query = query.or(orConditions);
+          }
+        }
+      } else if (teacherAssignments && teacherAssignments.length > 0) {
+        // Not a class teacher: normal assignment logic
         const orConditions = teacherAssignments
           .filter((a: any) => a.class_id)
           .map((a: any) => {
@@ -168,7 +220,7 @@ export async function GET(request: NextRequest) {
             }
           })
           .join(',');
-        console.log(`Students API: Teacher assignments OR conditions:`, orConditions);
+        console.log(`Students API: Normal teacher assignments OR conditions:`, orConditions);
         query = query.or(orConditions);
       } else {
         // Teacher has no assignments, return empty result

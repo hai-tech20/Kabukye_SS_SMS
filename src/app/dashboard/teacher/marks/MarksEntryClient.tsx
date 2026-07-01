@@ -457,36 +457,35 @@ export default function MarksEntryClient({
         const motPapers = [g.mot_p1, g.mot_p2, g.mot_p3, g.mot_p4].filter((p): p is number => p !== undefined && p !== null);
         const motScore = motPapers.length > 0 
           ? Math.round(motPapers.reduce((a, b) => a + b, 0) / motPapers.length)
-          : undefined;
+          : null;
         
         const eotPapers = [g.eot_p1, g.eot_p2, g.eot_p3, g.eot_p4].filter((p): p is number => p !== undefined && p !== null);
         const eotScore = eotPapers.length > 0
           ? Math.round(eotPapers.reduce((a, b) => a + b, 0) / eotPapers.length)
-          : undefined;
+          : null;
 
-        // Send only the fields that are actually present to avoid errors
+        // Send all fields, even null/undefined
         const gradeData: any = {
           student_id: g.student_id,
           class_id: selectedClass,
           stream_id: selectedStream,
           subject_id: selectedSubject,
           term: selectedTerm,
-          academic_year: selectedYear
+          academic_year: selectedYear,
+          mot_score: motScore,
+          eot_score: eotScore,
+          mot_p1: g.mot_p1,
+          eot_p1: g.eot_p1,
+          mot_p2: g.mot_p2,
+          eot_p2: g.eot_p2,
+          mot_p3: g.mot_p3,
+          eot_p3: g.eot_p3,
+          mot_p4: g.mot_p4,
+          eot_p4: g.eot_p4
         };
         
-        if (motScore !== undefined) gradeData.mot_score = motScore;
-        if (eotScore !== undefined) gradeData.eot_score = eotScore;
-        if (g.mot_p1 !== undefined && g.mot_p1 !== null) gradeData.mot_p1 = g.mot_p1;
-        if (g.eot_p1 !== undefined && g.eot_p1 !== null) gradeData.eot_p1 = g.eot_p1;
-        if (g.mot_p2 !== undefined && g.mot_p2 !== null) gradeData.mot_p2 = g.mot_p2;
-        if (g.eot_p2 !== undefined && g.eot_p2 !== null) gradeData.eot_p2 = g.eot_p2;
-        if (g.mot_p3 !== undefined && g.mot_p3 !== null) gradeData.mot_p3 = g.mot_p3;
-        if (g.eot_p3 !== undefined && g.eot_p3 !== null) gradeData.eot_p3 = g.eot_p3;
-        if (g.mot_p4 !== undefined && g.mot_p4 !== null) gradeData.mot_p4 = g.mot_p4;
-        if (g.eot_p4 !== undefined && g.eot_p4 !== null) gradeData.eot_p4 = g.eot_p4;
-        
         return gradeData;
-      }).filter(g => Object.keys(g).length > 6);
+      });
 
       if (gradesData.length === 0) {
         alert('No grades to save. Please enter marks first.');
