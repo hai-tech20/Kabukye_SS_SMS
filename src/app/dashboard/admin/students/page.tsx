@@ -1002,6 +1002,7 @@ export default function StudentsManagement() {
                           </div>
 
                           {(modalClassId === 's1' || modalClassId === 's2') && (
+                            <>
                             {/* Optional Subject 3 - S1/S2 only */}
                             <div className="mb-3">
                               <label className="block text-xs font-medium text-gray-600 mb-1">Optional Subject 3</label>
@@ -1024,6 +1025,7 @@ export default function StudentsManagement() {
                                   ))}
                               </select>
                             </div>
+                            </>
                           )}
                         </div>
                       )}
