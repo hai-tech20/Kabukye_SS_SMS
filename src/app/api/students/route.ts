@@ -116,8 +116,27 @@ export async function GET(request: NextRequest) {
       if (normalizedStreamId) {
         query = query.ilike('stream_id', normalizedStreamId);
       }
+    } else if (!isALevel && subjectId) {
+      console.log(`Students API: Using O-level subject filter for ${subjectId}, classId=${classId}, streamId=${streamId}`);
+      query = supabaseAdmin
+        .from('students')
+        .select(`
+          *,
+          classes!left(name),
+          streams!left(name),
+          student_optional_subjects!inner(subject_id)
+        `)
+        .eq('student_optional_subjects.subject_id', subjectId);
+      
+      // Apply class and stream filters immediately for O-level
+      if (normalizedClassId) {
+        query = query.ilike('class_id', normalizedClassId);
+      }
+      if (normalizedStreamId) {
+        query = query.ilike('stream_id', normalizedStreamId);
+      }
     } else {
-      console.log(`Students API: Using standard query (no A-level subject filter)`);
+      console.log(`Students API: Using standard query (no subject filter)`);
       query = supabaseAdmin
         .from('students')
         .select(`
