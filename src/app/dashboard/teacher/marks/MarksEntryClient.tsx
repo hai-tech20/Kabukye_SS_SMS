@@ -6,7 +6,7 @@ import Link from 'next/link';
 import TeacherSidebar from '@/components/sidebar/TeacherSidebar';
 import { getCurrentTerm } from '@/lib/academic-calendar';
 
-type SidebarComponent = React.ComponentType<{ sidebarOpen: boolean; setSidebarOpen: (open: boolean) => void }>;
+type SidebarComponentType = React.ComponentType<{ sidebarOpen: boolean; setSidebarOpen: (open: boolean) => void }>;
 
 interface MarksEntryClientProps {
   initialAssignments: Assignment[];
@@ -15,7 +15,7 @@ interface MarksEntryClientProps {
   initialSubjects: any[];
   teacherId: string;
   error: string | null;
-  SidebarComponent?: SidebarComponent;
+  SidebarComponent?: SidebarComponentType;
 }
 
 interface Student {
