@@ -234,7 +234,38 @@ export async function GET(request: NextRequest) {
       let points = g.points ?? g.uace_points ?? null;
       let uacePoints = g.uace_points ?? g.points ?? null;
 
-      if (isALevel && g.grade_papers && Array.isArray(g.grade_papers) && g.grade_papers.length > 0) {
+      const paperCount = g.subjects?.paper_count ?? 1;
+      const isMultiPaper = paperCount > 1 && g.grade_papers && Array.isArray(g.grade_papers) && g.grade_papers.length > 0;
+
+      if (isMultiPaper) {
+        const paperMap = new Map<number, { mot?: number; eot?: number }>();
+        for (const paper of g.grade_papers) {
+          const paperNumber = Number(paper.paper_number);
+          if (!paperMap.has(paperNumber)) paperMap.set(paperNumber, {});
+          const entry = paperMap.get(paperNumber)!;
+          if ((paper.assessment_type || '').toString().toUpperCase() === 'MOT') {
+            entry.mot = paper.score !== null && paper.score !== undefined ? Number(paper.score) : undefined;
+          } else if ((paper.assessment_type || '').toString().toUpperCase() === 'EOT') {
+            entry.eot = paper.score !== null && paper.score !== undefined ? Number(paper.score) : undefined;
+          }
+        }
+
+        const allMotScores = Array.from(paperMap.values())
+          .map(entry => entry.mot)
+          .filter((value): value is number => value !== undefined && value !== null);
+        const allEotScores = Array.from(paperMap.values())
+          .map(entry => entry.eot)
+          .filter((value): value is number => value !== undefined && value !== null);
+
+        if ((motScore === null || motScore === undefined) && allMotScores.length > 0) {
+          motScore = Math.round(allMotScores.reduce((sum, value) => sum + value, 0) / allMotScores.length);
+        }
+        if ((eotScore === null || eotScore === undefined) && allEotScores.length > 0) {
+          eotScore = Math.round(allEotScores.reduce((sum, value) => sum + value, 0) / allEotScores.length);
+        }
+      }
+
+      if (isALevel && isMultiPaper) {
         const paperMap = new Map<number, { mot?: number; eot?: number }>();
         for (const paper of g.grade_papers) {
           const paperNumber = Number(paper.paper_number);
@@ -254,9 +285,9 @@ export async function GET(request: NextRequest) {
 
         if (weightedScores.length > 0) {
           finalScore = Math.round(weightedScores.reduce((sum, value) => sum + value, 0) / weightedScores.length);
-          const paperCount = Math.min(g.subjects?.paper_count ?? weightedScores.length, weightedScores.length);
+          const effectivePaperCount = Math.min(paperCount, weightedScores.length);
           const weightedCodes = weightedScores.map(s => scoreToUnebCode(Math.round(s)));
-          const resolvedGrade = resolveAlevelSubjectGrade(weightedCodes, paperCount);
+          const resolvedGrade = resolveAlevelSubjectGrade(weightedCodes, effectivePaperCount);
           gradeLabel = resolvedGrade;
           const isSubsidiary = isAlevelSubjectName(subjectName);
           const pointValues = getAlevelPoints(resolvedGrade, isSubsidiary);
@@ -267,20 +298,6 @@ export async function GET(request: NextRequest) {
             descriptor = getAlevelDescriptor(gradeLabel);
           } else {
             descriptor = getAlevelDescriptor(resolvedGrade);
-          }
-
-          const allMotScores = Array.from(paperMap.values())
-            .map(entry => entry.mot)
-            .filter((value): value is number => value !== undefined && value !== null);
-          const allEotScores = Array.from(paperMap.values())
-            .map(entry => entry.eot)
-            .filter((value): value is number => value !== undefined && value !== null);
-
-          if ((motScore === null || motScore === undefined) && allMotScores.length > 0) {
-            motScore = Math.round(allMotScores.reduce((sum, value) => sum + value, 0) / allMotScores.length);
-          }
-          if ((eotScore === null || eotScore === undefined) && allEotScores.length > 0) {
-            eotScore = Math.round(allEotScores.reduce((sum, value) => sum + value, 0) / allEotScores.length);
           }
         } else if (g.grade_papers && Array.isArray(g.grade_papers) && g.grade_papers.length > 0) {
           // Fallback: if no explicit MOT/EOT distinction, treat all papers as MOT for now

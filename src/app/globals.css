@@ -32,6 +32,23 @@ textarea::placeholder {
   opacity: 1;
 }
 
+.rc-pdf-table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.rc-pdf-table th,
+.rc-pdf-table td {
+  box-sizing: border-box;
+  vertical-align: middle;
+  line-height: 1.25;
+}
+
+.pdf-report-card .rc-pdf-table th,
+.pdf-report-card .rc-pdf-table td {
+  border: 1px solid #1f2937 !important;
+}
+
 @media print {
   * {
     -webkit-print-color-adjust: exact !important;

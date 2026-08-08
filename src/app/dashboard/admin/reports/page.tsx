@@ -5,8 +5,20 @@ import { flushSync } from 'react-dom';
 import { getCurrentTerm } from '@/lib/academic-calendar';
 import { withRetry } from '@/lib/retry';
 import AdminSidebar from '@/components/sidebar/AdminSidebar';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { captureReportCardPdf, yieldToMain } from '@/lib/report-card-pdf-capture';
+import {
+  createJob,
+  getActiveJob,
+  saveJob,
+  stopJob,
+  isJobStopped,
+  clearJobStorage,
+  savePdfBlob,
+  getAllPdfBlobs,
+  getClassFolderName,
+  type PdfJobState,
+} from '@/lib/report-card-pdf-job';
+import { createZipBlob, downloadBlob, sanitizeFileName, type ZipEntry } from '@/lib/zip-utils';
 
 // Helper function for fetch with retry
 const fetchWithRetry = async (url: string, options?: RequestInit) => {
@@ -54,7 +66,10 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [pdfCurrentStudentIndex, setPdfCurrentStudentIndex] = useState(-1);
+  const [pdfJob, setPdfJob] = useState<PdfJobState | null>(null);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
+  const generationRunningRef = useRef(false);
+  const resumeAfterLoadRef = useRef<PdfJobState | null>(null);
 
   const currentTermData = getCurrentTerm();
   const getTermNumber = (termName: string) => {
@@ -79,13 +94,32 @@ export default function ReportsPage() {
   const [previewAssignedSubjects, setPreviewAssignedSubjects] = useState<Array<{ id: string; name: string; subject_type: string }>>([]);
   const [previewComments, setPreviewComments] = useState<{ class_teacher_comment?: string; head_teacher_comment?: string } | null>(null);
   const [previewAcademicTerm, setPreviewAcademicTerm] = useState<AcademicTerm | null>(null);
-  const [printAllReports, setPrintAllReports] = useState(false);
-  const [printAllLoading, setPrintAllLoading] = useState(false);
   const pdfStudentListRef = useRef<Student[]>([]);
 
   useEffect(() => {
     fetchClassesAndStreams();
   }, []);
+
+  useEffect(() => {
+    const job = getActiveJob();
+    if (job && job.status === 'running') {
+      setSelectedTerm(job.term);
+      setSelectedYear(job.year);
+      setSelectedClass(job.selectedClass);
+      setSelectedStream(job.selectedStream);
+      setPdfJob(job);
+      setPdfGenerating(true);
+      resumeAfterLoadRef.current = job;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!resumeAfterLoadRef.current || loading || generationRunningRef.current) return;
+    if (students.length === 0) return;
+    const job = resumeAfterLoadRef.current;
+    resumeAfterLoadRef.current = null;
+    void runPdfGeneration(job, job.currentIndex);
+  }, [loading, students.length]);
 
   const fetchClassesAndStreams = async () => {
     try {
@@ -479,35 +513,6 @@ export default function ReportsPage() {
     window.print();
   };
 
-  const handlePrintAll = async () => {
-    if (students.length === 0) {
-      alert('No students to print!');
-      return;
-    }
-
-    const sorted = sortStudentsForReports(students);
-    setPrintAllLoading(true);
-
-    try {
-      await prefetchSubjectDataForStudents(sorted);
-      setPrintAllReports(true);
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      const container = document.querySelector('.print-all-container') as HTMLElement | null;
-      if (container) {
-        await waitForImages(container);
-      }
-      window.print();
-    } catch (error) {
-      console.error('Print all failed:', error);
-      alert('Failed to prepare reports for printing.');
-    } finally {
-      setTimeout(() => {
-        setPrintAllReports(false);
-        setPrintAllLoading(false);
-      }, 500);
-    }
-  };
-
   const handleClosePreview = () => {
     setShowPreview(false);
     setPreviewStudent(null);
@@ -550,21 +555,173 @@ export default function ReportsPage() {
     await Promise.all(studentList.map((student) => fetchSubjectDataForStudent(student)));
   };
 
-  const waitForImages = async (element: HTMLElement) => {
-    const images = Array.from(element.querySelectorAll('img'));
-    await Promise.all(
-      images.map(
-        (img) =>
-          new Promise<void>((resolve) => {
-            if (img.complete) {
-              resolve();
-              return;
-            }
-            img.onload = () => resolve();
-            img.onerror = () => resolve();
-          })
-      )
-    );
+  const fetchAcademicTermForPdf = async (term: string, year: string): Promise<AcademicTerm | null> => {
+    try {
+      const academicResponse = await fetchWithRetry('/api/academic/overview');
+      if (!academicResponse.ok) return null;
+      const overview = await academicResponse.json();
+      const yearItem = (overview.academic_years || []).find((y: any) => y.year_label === year);
+      const currentTermNumber = Number(term);
+      if (!yearItem) return null;
+      const currentTerm = (overview.terms || []).find(
+        (t: any) => Number(t.term_number) === currentTermNumber && t.year_id === yearItem.id
+      );
+      if (!currentTerm) return null;
+      const nextTerm =
+        (overview.terms || []).find(
+          (t: any) => Number(t.term_number) === currentTermNumber + 1 && t.year_id === yearItem.id
+        ) ||
+        (currentTermNumber === 3
+          ? (overview.terms || []).find(
+              (t: any) =>
+                Number(t.term_number) === 1 &&
+                overview.academic_years?.find((y: any) => y.id === t.year_id)?.year_label ===
+                  String(Number(year) + 1)
+            )
+          : null);
+      return {
+        end_date: currentTerm.end_date,
+        next_term_start_date: nextTerm?.start_date || '',
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const resolveJobStudents = (job: PdfJobState): Student[] =>
+    job.students.map((js) => {
+      const found = students.find((s) => s.id === js.id);
+      return (
+        found || {
+          id: js.id,
+          full_name: js.full_name,
+          class: js.class,
+          stream: js.stream,
+          gender: '',
+        }
+      );
+    });
+
+  const buildStudentPdfPath = (student: Student) => {
+    const classFolder = getClassFolderName(student.class);
+    const fileName = `${sanitizeFileName(student.full_name)} - ${classFolder} ${sanitizeFileName(student.stream)}.pdf`;
+    return `${classFolder}/${fileName}`;
+  };
+
+  const runPdfGeneration = async (job: PdfJobState, startIndex: number) => {
+    if (generationRunningRef.current) return;
+    generationRunningRef.current = true;
+    setPdfGenerating(true);
+    setPdfJob(job);
+
+    const sortedStudents = sortStudentsForReports(resolveJobStudents(job));
+    pdfStudentListRef.current = sortedStudents;
+
+    const termForCapture = job.term;
+    const yearForCapture = job.year;
+    let academicTermForCapture: AcademicTerm | null = previewAcademicTerm;
+    if (!academicTermForCapture) {
+      academicTermForCapture = await fetchAcademicTermForPdf(termForCapture, yearForCapture);
+      if (academicTermForCapture) setPreviewAcademicTerm(academicTermForCapture);
+    }
+
+    const remaining = sortedStudents.slice(startIndex);
+    await prefetchSubjectDataForStudents(remaining);
+
+    try {
+      for (let i = startIndex; i < sortedStudents.length; i++) {
+        if (isJobStopped()) {
+          job.status = 'stopped';
+          saveJob(job);
+          break;
+        }
+
+        const student = sortedStudents[i];
+        if (job.completedIds.includes(student.id)) {
+          flushSync(() => setPdfCurrentStudentIndex(i));
+          continue;
+        }
+
+        flushSync(() => setPdfCurrentStudentIndex(i));
+        await yieldToMain();
+
+        const reportCardElement = pdfContainerRef.current?.querySelector('.pdf-report-card') as HTMLElement | null;
+        if (!reportCardElement) continue;
+
+        try {
+          const pdfBlob = await captureReportCardPdf(reportCardElement);
+          await savePdfBlob(job.id, student.id, pdfBlob);
+          job.completedIds.push(student.id);
+          job.currentIndex = i + 1;
+          saveJob(job);
+          setPdfJob({ ...job });
+        } catch (studentError) {
+          console.error(`Failed to capture report for ${student.full_name}:`, studentError);
+        }
+      }
+
+      if (isJobStopped()) {
+        alert('Report card generation stopped.');
+        return;
+      }
+
+      const completedStudents = sortedStudents.filter((s) => job.completedIds.includes(s.id));
+      if (completedStudents.length === 0) {
+        alert('No report cards could be generated. Check console for details.');
+        job.status = 'failed';
+        saveJob(job);
+        return;
+      }
+
+      const blobMap = await getAllPdfBlobs(
+        job.id,
+        completedStudents.map((s) => s.id)
+      );
+
+      const zipEntries: ZipEntry[] = [];
+      for (const student of completedStudents) {
+        const blob = blobMap.get(student.id);
+        if (!blob) continue;
+        const buffer = await blob.arrayBuffer();
+        zipEntries.push({
+          path: buildStudentPdfPath(student),
+          data: new Uint8Array(buffer),
+        });
+      }
+
+      if (zipEntries.length === 0) {
+        alert('Failed to assemble report cards ZIP.');
+        job.status = 'failed';
+        saveJob(job);
+        return;
+      }
+
+      const zipBlob = createZipBlob(zipEntries);
+      downloadBlob(zipBlob, job.zipFileName);
+
+      job.status = 'completed';
+      saveJob(job);
+      await clearJobStorage(job.id);
+      alert(`Downloaded ${zipEntries.length} report card(s) as ${job.zipFileName}`);
+    } catch (error) {
+      console.error('Error generating report cards:', error);
+      job.status = 'failed';
+      job.error = error instanceof Error ? error.message : 'Unknown error';
+      saveJob(job);
+      alert('Failed to generate report cards. Check console for details.');
+    } finally {
+      generationRunningRef.current = false;
+      flushSync(() => setPdfCurrentStudentIndex(-1));
+      setPdfGenerating(false);
+      setPdfJob(null);
+    }
+  };
+
+  const handleStopGeneration = () => {
+    stopJob();
+    generationRunningRef.current = false;
+    setPdfGenerating(false);
+    flushSync(() => setPdfCurrentStudentIndex(-1));
   };
 
   const generatePDF = async () => {
@@ -574,148 +731,55 @@ export default function ReportsPage() {
     }
 
     if (students.length === 0) {
-      alert('No students to generate PDF for!');
+      alert('No students to generate report cards for!');
       return;
     }
 
-    // Check if all students have grades
-    const studentsWithoutGrades = students.filter(s => {
-      const studentGrades = grades.filter(g => g.student_id === s.id);
-      return studentGrades.length === 0;
-    });
+    const activeJob = getActiveJob();
+    if (activeJob?.status === 'running') {
+      alert('Report card generation is already in progress.');
+      return;
+    }
 
+    const studentsWithoutGrades = students.filter((s) => grades.filter((g) => g.student_id === s.id).length === 0);
     if (studentsWithoutGrades.length > 0) {
       const count = studentsWithoutGrades.length;
-      if (!confirm(`${count} student(s) have no grades recorded. Generate PDF anyway? They will show empty report cards.`)) {
+      if (
+        !confirm(
+          `${count} student(s) have no grades recorded. Generate report cards anyway? They will show empty report cards.`
+        )
+      ) {
         return;
       }
     }
 
-    if (!confirm(`Generate PDF for ${students.length} student(s)? This may take a while.`)) {
+    const sortedStudents = sortStudentsForReports(students);
+    if (
+      !confirm(
+        `Generate ${sortedStudents.length} report card PDF(s) organized by class in a ZIP file? You can refresh the page and generation will continue until you click Stop.`
+      )
+    ) {
       return;
     }
 
-    setPdfGenerating(true);
+    const job = createJob({
+      term: selectedTerm,
+      year: selectedYear,
+      selectedClass,
+      selectedStream,
+      students: sortedStudents.map((s) => ({
+        id: s.id,
+        full_name: s.full_name,
+        class: s.class,
+        stream: s.stream,
+      })),
+    });
 
-    const sortedStudents = sortStudentsForReports(students);
-    pdfStudentListRef.current = sortedStudents;
-
-    try {
-      console.log('Starting PDF generation...');
-      await prefetchSubjectDataForStudents(sortedStudents);
-
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      let pagesAdded = 0;
-
-      for (let i = 0; i < sortedStudents.length; i++) {
-        console.log(`Processing student ${i + 1}/${sortedStudents.length}`);
-
-        flushSync(() => {
-          setPdfCurrentStudentIndex(i);
-        });
-
-        await new Promise(resolve => setTimeout(resolve, 150));
-
-        const reportCardElement = pdfContainerRef.current?.querySelector('.pdf-report-card') as HTMLElement;
-        if (!reportCardElement) continue;
-
-        await waitForImages(reportCardElement);
-
-        try {
-          const canvas = await Promise.race([
-            html2canvas(reportCardElement, {
-              scale: 1.25,
-              useCORS: true,
-              backgroundColor: '#ffffff',
-              logging: false,
-              allowTaint: true,
-              imageTimeout: 8000,
-              ignoreElements: (element) => element.tagName === 'SCRIPT',
-            }),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('Capture timed out')), 45000)
-            ),
-          ]);
-
-          const imgData = canvas.toDataURL('image/jpeg', 0.92);
-
-          if (pagesAdded > 0) {
-            pdf.addPage();
-          }
-          pagesAdded++;
-
-          const imgHeight = (canvas.height * pageWidth) / canvas.width;
-          pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, imgHeight);
-
-          canvas.width = 0;
-          canvas.height = 0;
-        } catch (studentError) {
-          console.error(`Failed to capture report for ${sortedStudents[i].full_name}:`, studentError);
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-
-      if (pagesAdded === 0) {
-        alert('No report cards could be generated. Check console for details.');
-        return;
-      }
-
-      console.log('PDF generated, downloading...');
-      const fileName = `Report_Cards_${selectedYear}_Term_${selectedTerm}.pdf`;
-      pdf.save(fileName);
-      alert('PDF generated and downloaded successfully!');
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      alert('Failed to generate PDF! Check console for details.');
-    } finally {
-      flushSync(() => {
-        setPdfCurrentStudentIndex(-1);
-      });
-      setPdfGenerating(false);
-    }
+    await runPdfGeneration(job, 0);
   };
 
   return (
     <div className="h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex overflow-hidden relative">
-      {/* Print-only content (always at top level) */}
-      {printAllReports && (
-        <div className="print-only absolute top-0 left-0 w-full bg-white p-0 print-all-container">
-          {sortStudentsForReports(students).map((student) => {
-            const cachedSubjects = studentSubjectDataCache.current.get(student.id);
-            const optionalSubjectsForStudent = cachedSubjects?.optionalSubjects || [];
-            const assignedSubjectsForStudent = cachedSubjects?.assignedSubjects || [];
-
-            return (
-              <div key={student.id}>
-                <ReportCard
-                  student={student}
-                  grades={grades.filter(g => g.student_id === student.id)}
-                  term={selectedTerm}
-                  year={selectedYear}
-                  classTeacher={classTeachers[`${student.class}-${student.stream}`] || 'Not Assigned'}
-                  headTeacher="Mr. ISABIRYE SALEH"
-                  classTeacherComment={(student as any)?.auto_class_teacher_comment || ''}
-                  headTeacherComment={(student as any)?.auto_head_teacher_comment || ''}
-                  academicTerm={previewAcademicTerm || undefined}
-                  optionalSubjects={optionalSubjectsForStudent}
-                  assignedSubjects={assignedSubjectsForStudent}
-                  positionInClass={(student as any)?._positionInClass}
-                  positionInStream={(student as any)?._positionInStream}
-                  totalStudentsInClass={(window as any).__report_positions?.totals?.byClass?.[student.class]}
-                  totalStudentsInStream={(window as any).__report_positions?.totals?.byStream?.[`${student.class}-${student.stream}`]}
-                />
-              </div>
-            );
-          })}
-        </div>
-      )}
       {showPreview && previewStudent && (
         <div className="print-only absolute top-0 left-0 w-full bg-white p-0">
           <div>
@@ -846,28 +910,7 @@ export default function ReportsPage() {
                   </span>
                 )}
               </div>
-              <div className="flex space-x-3 flex-wrap">
-                <button
-                  onClick={handlePrintAll}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-md font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={pdfGenerating || printAllLoading}
-                >
-                  {printAllLoading ? (
-                    <>
-                      <svg className="animate-spin w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      Preparing...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                      </svg>
-                      Print All Reports
-                    </>
-                  )}
-                </button>
+              <div className="flex space-x-3 flex-wrap items-center">
                 <button
                   onClick={generatePDF}
                   className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center shadow-md font-bold disabled:opacity-50 disabled:cursor-not-allowed"
@@ -878,19 +921,30 @@ export default function ReportsPage() {
                       <svg className="animate-spin w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
-                      {pdfCurrentStudentIndex >= 0 
-                        ? `Generating PDF (${pdfCurrentStudentIndex + 1}/${pdfStudentListRef.current.length || students.length})` 
-                        : 'Generating PDF...'}
+                      {pdfCurrentStudentIndex >= 0
+                        ? `Generating (${pdfCurrentStudentIndex + 1}/${pdfJob?.students.length || pdfStudentListRef.current.length || students.length})`
+                        : 'Generating...'}
                     </>
                   ) : (
                     <>
                       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
-                      Download PDF
+                      Download Report Cards (ZIP)
                     </>
                   )}
                 </button>
+                {pdfGenerating && (
+                  <button
+                    onClick={handleStopGeneration}
+                    className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center shadow-md font-bold"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Stop Generation
+                  </button>
+                )}
 {selectedClass !== 'ALL' && (
                    <button
                      onClick={handlePublishResults}
@@ -1019,7 +1073,25 @@ export default function ReportsPage() {
             </div>
           )}
 
-          {/* Hidden container for PDF generation - completely separate styling */}
+          {pdfGenerating && (
+            <div className="fixed bottom-6 right-6 z-50 no-print bg-white border border-green-200 shadow-2xl rounded-xl p-4 max-w-sm">
+              <p className="text-sm font-semibold text-gray-900 mb-1">Generating report cards</p>
+              <p className="text-xs text-gray-600 mb-3">
+                {pdfCurrentStudentIndex >= 0
+                  ? `Student ${pdfCurrentStudentIndex + 1} of ${pdfJob?.students.length || pdfStudentListRef.current.length}`
+                  : 'Preparing...'}
+                {' '}— safe to refresh; only Stop will cancel.
+              </p>
+              <button
+                onClick={handleStopGeneration}
+                className="w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm font-semibold"
+              >
+                Stop Generation
+              </button>
+            </div>
+          )}
+
+          {/* Hidden container for PDF generation */}
           <div 
             ref={pdfContainerRef} 
             className="fixed"
@@ -1039,22 +1111,24 @@ export default function ReportsPage() {
               const cachedSubjects = studentSubjectDataCache.current.get(student.id);
               const optionalSubjectsForStudent = cachedSubjects?.optionalSubjects || [];
               const assignedSubjectsForStudent = cachedSubjects?.assignedSubjects || [];
+              const captureTerm = pdfJob?.term || selectedTerm;
+              const captureYear = pdfJob?.year || selectedYear;
 
               return (
-                <div 
+                <div
                   className="pdf-report-card"
                   style={{
                     width: '210mm',
                     padding: '0',
                     margin: '0',
-                    pageBreakInside: 'avoid'
+                    pageBreakInside: 'avoid',
                   }}
                 >
                   <ReportCard
                     student={student}
-                    grades={grades.filter(g => g.student_id === student.id)}
-                    term={selectedTerm}
-                    year={selectedYear}
+                    grades={grades.filter((g) => g.student_id === student.id)}
+                    term={captureTerm}
+                    year={captureYear}
                     classTeacher={classTeachers[`${student.class}-${student.stream}`] || 'Not Assigned'}
                     headTeacher="Mr. ISABIRYE SALEH"
                     classTeacherComment={(student as any)?.auto_class_teacher_comment || ''}
@@ -1065,7 +1139,10 @@ export default function ReportsPage() {
                     positionInClass={(student as any)?._positionInClass}
                     positionInStream={(student as any)?._positionInStream}
                     totalStudentsInClass={(window as any).__report_positions?.totals?.byClass?.[student.class]}
-                    totalStudentsInStream={(window as any).__report_positions?.totals?.byStream?.[`${student.class}-${student.stream}`]}
+                    totalStudentsInStream={
+                      (window as any).__report_positions?.totals?.byStream?.[`${student.class}-${student.stream}`]
+                    }
+                    forPdfCapture
                   />
                 </div>
               );

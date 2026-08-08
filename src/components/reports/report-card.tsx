@@ -49,6 +49,8 @@ export interface ReportCardProps {
   assignedSubjects?: Array<{ id: string; subject_id?: string; name: string; subject_type: string }>;
   classTeacherComment?: string;
   headTeacherComment?: string;
+  /** Cleaner table layout for html2canvas PDF capture (avoids border bleed) */
+  forPdfCapture?: boolean;
 }
 
 export const isSeniorSecondaryClass = (className: string) => /^(S5|S6)/i.test(className || '');
@@ -309,18 +311,22 @@ const ReportCardTemplateFooter: React.FC<{
   academicTerm?: AcademicTerm;
   classTeacherComment?: string;
   headTeacherComment?: string;
-}> = ({ classTeacher, academicTerm, classTeacherComment, headTeacherComment }) => (
+  forPdfCapture?: boolean;
+}> = ({ classTeacher, academicTerm, classTeacherComment, headTeacherComment, forPdfCapture }) => (
   <div className="mt-4 font-serif text-xs text-black">
     <p className="font-bold mb-2">CLASS TEACHER: {classTeacher}</p>
-    <table className="w-full border-collapse border border-gray-800 mb-3">
+    <table
+      className={forPdfCapture ? 'w-full border-separate rc-pdf-table' : 'w-full border-collapse border border-gray-800 mb-3'}
+      style={forPdfCapture ? { borderSpacing: 0 } : undefined}
+    >
       <tbody>
         <tr>
-          <td className="border border-gray-800 px-2 py-2 font-bold w-1/3 align-top">Class Teacher&apos;s comment</td>
-          <td className="border border-gray-800 px-2 py-2 min-h-[2.5rem]">{classTeacherComment || ''}</td>
+          <td className={pdfCellClass(!!forPdfCapture, 'font-bold w-1/3 align-top')}>Class Teacher&apos;s comment</td>
+          <td className={pdfCellClass(!!forPdfCapture, 'min-h-[2.5rem]')}>{classTeacherComment || ''}</td>
         </tr>
         <tr>
-          <td className="border border-gray-800 px-2 py-2 font-bold align-top">Headteacher&apos;s comment</td>
-          <td className="border border-gray-800 px-2 py-2 min-h-[2.5rem]">{headTeacherComment || ''}</td>
+          <td className={pdfCellClass(!!forPdfCapture, 'font-bold align-top')}>Headteacher&apos;s comment</td>
+          <td className={pdfCellClass(!!forPdfCapture, 'min-h-[2.5rem]')}>{headTeacherComment || ''}</td>
         </tr>
       </tbody>
     </table>
@@ -360,32 +366,42 @@ const S3_S4_FIXED_SUBJECTS = [
   'Chemistry',
 ];
 
-const ReportCardOfficialGradingScale: React.FC = () => (
-  <table className="w-full border-collapse border border-gray-800 text-[10px] mb-2 font-serif">
+const pdfTableClass = (forPdf: boolean) =>
+  forPdf
+    ? 'w-full border-separate text-[10px] mb-2 font-serif rc-pdf-table'
+    : 'w-full border-collapse border border-gray-800 text-[10px] mb-2 font-serif';
+
+const pdfCellClass = (forPdf: boolean, extra = '') =>
+  forPdf
+    ? `border border-gray-800 px-1 py-0.5 box-border ${extra}`.trim()
+    : `border border-gray-800 px-1 py-0.5 ${extra}`.trim();
+
+const ReportCardOfficialGradingScale: React.FC<{ forPdfCapture?: boolean }> = ({ forPdfCapture }) => (
+  <table className={pdfTableClass(!!forPdfCapture)} style={forPdfCapture ? { borderSpacing: 0 } : undefined}>
     <tbody>
       <tr>
-        <td className="border border-gray-800 px-1 py-0.5 font-bold w-[22%]">GRADING SCHEME</td>
-        <td className="border border-gray-800 px-1 py-0.5 text-center font-bold">A</td>
-        <td className="border border-gray-800 px-1 py-0.5 text-center font-bold">B</td>
-        <td className="border border-gray-800 px-1 py-0.5 text-center font-bold">C</td>
-        <td className="border border-gray-800 px-1 py-0.5 text-center font-bold">D</td>
-        <td className="border border-gray-800 px-1 py-0.5 text-center font-bold">E</td>
+        <td className={pdfCellClass(!!forPdfCapture, 'font-bold w-[22%]')}>GRADING SCHEME</td>
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>A</td>
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>B</td>
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>C</td>
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>D</td>
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>E</td>
       </tr>
       <tr>
-        <td className="border border-gray-800 px-1 py-0.5" />
-        <td className="border border-gray-800 px-1 py-0.5 text-center">Exceptional</td>
-        <td className="border border-gray-800 px-1 py-0.5 text-center">Outstanding</td>
-        <td className="border border-gray-800 px-1 py-0.5 text-center">Satisfactory</td>
-        <td className="border border-gray-800 px-1 py-0.5 text-center">Basic</td>
-        <td className="border border-gray-800 px-1 py-0.5 text-center">Elementary</td>
+        <td className={pdfCellClass(!!forPdfCapture)} />
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>Exceptional</td>
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>Outstanding</td>
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>Satisfactory</td>
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>Basic</td>
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>Elementary</td>
       </tr>
       <tr>
-        <td className="border border-gray-800 px-1 py-0.5" />
-        <td className="border border-gray-800 px-1 py-0.5 text-center">80-100</td>
-        <td className="border border-gray-800 px-1 py-0.5 text-center">70-79</td>
-        <td className="border border-gray-800 px-1 py-0.5 text-center">50-69</td>
-        <td className="border border-gray-800 px-1 py-0.5 text-center">35-49</td>
-        <td className="border border-gray-800 px-1 py-0.5 text-center">00-34</td>
+        <td className={pdfCellClass(!!forPdfCapture)} />
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>80-100</td>
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>70-79</td>
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>50-69</td>
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>35-49</td>
+        <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>00-34</td>
       </tr>
     </tbody>
   </table>
@@ -422,6 +438,7 @@ const ReportCardOLevel: React.FC<ReportCardOLevelProps> = (props) => {
     showResult,
     fixedSubjects = S1_S2_FIXED_SUBJECTS,
     optionalCount = 2,
+    forPdfCapture,
   } = props;
 
   const gradesMap = new Map<string, Grade>();
@@ -494,36 +511,36 @@ const ReportCardOLevel: React.FC<ReportCardOLevelProps> = (props) => {
       <ReportCardOfficialHeader />
       <ReportCardTemplateStudentInfo student={student} term={term} year={year} />
 
-      <table className="w-full border-collapse border border-gray-800 mb-1 text-[10px] rc-table">
+      <table className={pdfTableClass(!!forPdfCapture)} style={forPdfCapture ? { borderSpacing: 0 } : undefined}>
         <thead>
           <tr>
-            <th className="border border-gray-800 px-1 py-0.5 text-left font-bold">SUBJECT</th>
-            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">MOT [20%]</th>
-            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">EOT [80%]</th>
-            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">Final score</th>
-            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">Grade</th>
-            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">Descriptor</th>
-            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">Teacher</th>
+            <th className={pdfCellClass(!!forPdfCapture, 'text-left font-bold')}>SUBJECT</th>
+            <th className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>MOT [20%]</th>
+            <th className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>EOT [80%]</th>
+            <th className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>Final score</th>
+            <th className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>Grade</th>
+            <th className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>Descriptor</th>
+            <th className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>Teacher</th>
           </tr>
         </thead>
         <tbody>
           {rowsToRender.map((row, index) => (
             <tr key={index}>
-              <td className="border border-gray-800 px-1 py-0.5">{row.name}</td>
-              <td className="border border-gray-800 px-1 py-0.5 text-center">{row.grade?.mot ?? ''}</td>
-              <td className="border border-gray-800 px-1 py-0.5 text-center">{row.grade?.eot ?? ''}</td>
-              <td className="border border-gray-800 px-1 py-0.5 text-center">{row.grade?.final_score ?? ''}</td>
-              <td className="border border-gray-800 px-1 py-0.5 text-center font-bold">{row.grade?.grade ?? ''}</td>
-              <td className="border border-gray-800 px-1 py-0.5 text-center">{row.grade?.descriptor ?? ''}</td>
-              <td className="border border-gray-800 px-1 py-0.5 text-center">{row.grade?.teacher ?? ''}</td>
+              <td className={pdfCellClass(!!forPdfCapture)}>{row.name}</td>
+              <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>{row.grade?.mot ?? ''}</td>
+              <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>{row.grade?.eot ?? ''}</td>
+              <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>{row.grade?.final_score ?? ''}</td>
+              <td className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>{row.grade?.grade ?? ''}</td>
+              <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>{row.grade?.descriptor ?? ''}</td>
+              <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>{row.grade?.teacher ?? ''}</td>
             </tr>
           ))}
           <tr className="font-bold">
-            <td className="border border-gray-800 px-1 py-0.5">Overall % average score</td>
-            <td className="border border-gray-800 px-1 py-0.5" />
-            <td className="border border-gray-800 px-1 py-0.5" />
-            <td className="border border-gray-800 px-1 py-0.5 text-center">{averageScore}%</td>
-            <td className="border border-gray-800 px-1 py-0.5" colSpan={3} />
+            <td className={pdfCellClass(!!forPdfCapture)}>Overall % average score</td>
+            <td className={pdfCellClass(!!forPdfCapture)} />
+            <td className={pdfCellClass(!!forPdfCapture)} />
+            <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>{averageScore}%</td>
+            <td className={pdfCellClass(!!forPdfCapture)} colSpan={3} />
           </tr>
         </tbody>
       </table>
@@ -536,12 +553,13 @@ const ReportCardOLevel: React.FC<ReportCardOLevelProps> = (props) => {
         <p className="text-[10px] font-bold mb-1">Result: {getOLevelResult(averageScore)}</p>
       )}
 
-      <ReportCardOfficialGradingScale />
+      <ReportCardOfficialGradingScale forPdfCapture={forPdfCapture} />
       <ReportCardTemplateFooter
         classTeacher={classTeacher}
         academicTerm={academicTerm}
         classTeacherComment={classTeacherComment}
         headTeacherComment={headTeacherComment}
+        forPdfCapture={forPdfCapture}
       />
     </div>
   );
@@ -594,6 +612,7 @@ const ReportCardS5S6: React.FC<ReportCardS5S6Props> = (props) => {
     assignedSubjects,
     classTeacherComment,
     headTeacherComment,
+    forPdfCapture,
   } = props;
 
   const gradesMap = new Map<string, Grade>();
@@ -715,28 +734,28 @@ const ReportCardS5S6: React.FC<ReportCardS5S6Props> = (props) => {
         showCombination
       />
 
-      <table className="w-full border-collapse border border-gray-800 mb-1 text-xs">
+      <table className={forPdfCapture ? 'w-full border-separate text-xs rc-pdf-table' : 'w-full border-collapse border border-gray-800 mb-1 text-xs'} style={forPdfCapture ? { borderSpacing: 0 } : undefined}>
         <thead>
           <tr>
-            <th className="border border-gray-800 px-1.5 py-1 text-left font-bold">SUBJECT</th>
-            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">MOT [20%]</th>
-            <th className="border border-gray-800 px-1 py-0.5 text-center font-bold">EOT [80%]</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold">Final score</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold">Grade</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold">Points</th>
-            <th className="border border-gray-800 px-1.5 py-1 text-center font-bold">Teacher</th>
+            <th className={pdfCellClass(!!forPdfCapture, 'text-left font-bold')}>SUBJECT</th>
+            <th className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>MOT [20%]</th>
+            <th className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>EOT [80%]</th>
+            <th className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>Final score</th>
+            <th className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>Grade</th>
+            <th className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>Points</th>
+            <th className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>Teacher</th>
           </tr>
         </thead>
         <tbody>
           {rowsToRender.map((row, index) => (
             <tr key={index}>
-              <td className="border border-gray-800 px-1.5 py-1">{row.name}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center">{row.grade?.mot ?? ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center">{row.grade?.eot ?? ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center">{row.grade?.final_score ?? ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center font-bold">{row.grade?.grade ?? ''}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center">{row.grade?.uace_points ?? row.grade?.points ?? getUacePointsFromGrade(row.grade?.grade, row.name)}</td>
-              <td className="border border-gray-800 px-1.5 py-1 text-center">{row.grade?.teacher ?? ''}</td>
+              <td className={pdfCellClass(!!forPdfCapture)}>{row.name}</td>
+              <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>{row.grade?.mot ?? ''}</td>
+              <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>{row.grade?.eot ?? ''}</td>
+              <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>{row.grade?.final_score ?? ''}</td>
+              <td className={pdfCellClass(!!forPdfCapture, 'text-center font-bold')}>{row.grade?.grade ?? ''}</td>
+              <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>{row.grade?.uace_points ?? row.grade?.points ?? getUacePointsFromGrade(row.grade?.grade, row.name)}</td>
+              <td className={pdfCellClass(!!forPdfCapture, 'text-center')}>{row.grade?.teacher ?? ''}</td>
             </tr>
           ))}
         </tbody>
@@ -749,6 +768,7 @@ const ReportCardS5S6: React.FC<ReportCardS5S6Props> = (props) => {
         academicTerm={academicTerm}
         classTeacherComment={resolvedClassTeacherComment}
         headTeacherComment={resolvedHeadTeacherComment}
+        forPdfCapture={forPdfCapture}
       />
     </div>
   );
