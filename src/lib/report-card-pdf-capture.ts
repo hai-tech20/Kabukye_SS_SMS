@@ -1,7 +1,9 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-const CAPTURE_SCALE = 1.1;
+/** Integer scale avoids sub-pixel canvas rounding (which made borders bleed into
+ *  text). 3x on a 210mm-wide card works out to ~288dpi, well within print quality. */
+const CAPTURE_SCALE = 3;
 const JPEG_QUALITY = 0.88;
 
 export async function waitForImages(element: HTMLElement): Promise<void> {
@@ -21,7 +23,15 @@ export async function waitForImages(element: HTMLElement): Promise<void> {
   );
 }
 
-export async function captureReportCardPdf(element: HTMLElement): Promise<Blob> {
+export interface CapturedReportCard {
+  imageBlob: Blob;
+  pixelWidth: number;
+  pixelHeight: number;
+}
+
+/** Rasterizes a report-card element to a JPEG image (no PDF assembly here, so the
+ *  same capture can be reused for both the individual PDF and the merged class PDF). */
+export async function captureReportCardImage(element: HTMLElement): Promise<CapturedReportCard> {
   await waitForImages(element);
 
   const canvas = await Promise.race([
@@ -39,16 +49,59 @@ export async function captureReportCardPdf(element: HTMLElement): Promise<Blob> 
     ),
   ]);
 
-  const imgData = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
-  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const imgHeight = (canvas.height * pageWidth) / canvas.width;
-  pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, imgHeight);
+  const imageBlob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error('Canvas toBlob failed'))),
+      'image/jpeg',
+      JPEG_QUALITY
+    );
+  });
 
+  const pixelWidth = canvas.width;
+  const pixelHeight = canvas.height;
   canvas.width = 0;
   canvas.height = 0;
 
-  return pdf.output('blob');
+  return { imageBlob, pixelWidth, pixelHeight };
+}
+
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+export function createEmptyPdfDoc(): jsPDF {
+  return new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+}
+
+/** Adds a captured report-card image as a page. Pass isFirstPage=true for a doc's
+ *  first page (jsPDF already creates one on construction); false calls addPage(). */
+export function addImagePage(
+  pdf: jsPDF,
+  dataUrl: string,
+  pixelWidth: number,
+  pixelHeight: number,
+  isFirstPage: boolean
+): void {
+  if (!isFirstPage) pdf.addPage();
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const imgHeight = (pixelHeight * pageWidth) / pixelWidth;
+  pdf.addImage(dataUrl, 'JPEG', 0, 0, pageWidth, imgHeight);
+}
+
+/** Kicks off image loads for the given URLs in parallel ahead of the capture loop,
+ *  so by the time each student is captured its photo is already in the browser cache
+ *  instead of blocking that student's capture on a fresh network round trip. */
+export function preloadImages(urls: Array<string | undefined | null>): void {
+  const unique = Array.from(new Set(urls.filter((u): u is string => !!u)));
+  for (const url of unique) {
+    const img = new Image();
+    img.src = url;
+  }
 }
 
 /** Yield to the browser between captures so the UI stays responsive. */

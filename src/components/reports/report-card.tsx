@@ -371,10 +371,14 @@ const pdfTableClass = (forPdf: boolean) =>
     ? 'w-full border-separate text-[10px] mb-2 font-serif rc-pdf-table'
     : 'w-full border-collapse border border-gray-800 text-[10px] mb-2 font-serif';
 
-const pdfCellClass = (forPdf: boolean, extra = '') =>
-  forPdf
-    ? `border border-gray-800 px-1 py-0.5 box-border ${extra}`.trim()
-    : `border border-gray-800 px-1 py-0.5 ${extra}`.trim();
+const pdfCellClass = (forPdf: boolean, extra = '') => {
+  if (!forPdf) return `border border-gray-800 px-1 py-0.5 ${extra}`.trim();
+  // Extra vertical padding + leading keep glyph descenders clear of the cell
+  // border when html2canvas rasterizes this table (was causing digits/text to
+  // look struck-through by the border line).
+  const alignment = extra.includes('align-top') ? '' : 'align-middle';
+  return `border border-gray-800 px-1.5 py-1.5 box-border leading-[1.6] ${alignment} ${extra}`.trim();
+};
 
 const ReportCardOfficialGradingScale: React.FC<{ forPdfCapture?: boolean }> = ({ forPdfCapture }) => (
   <table className={pdfTableClass(!!forPdfCapture)} style={forPdfCapture ? { borderSpacing: 0 } : undefined}>

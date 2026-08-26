@@ -1,6 +1,6 @@
 /**
  * Persistent report-card PDF generation job state.
- * Survives page refresh via localStorage (metadata) + IndexedDB (PDF blobs).
+ * Survives page refresh via localStorage (metadata) + IndexedDB (captured card images).
  */
 
 const JOB_KEY = 'report_card_pdf_job';
@@ -98,22 +98,32 @@ export async function clearJobStorage(jobId: string) {
   }
 }
 
-export async function savePdfBlob(jobId: string, studentId: string, blob: Blob) {
+export interface CapturedImageRecord {
+  blob: Blob;
+  width: number;
+  height: number;
+}
+
+export async function saveCapturedImage(
+  jobId: string,
+  studentId: string,
+  record: CapturedImageRecord
+) {
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(blob, `${jobId}:${studentId}`);
+    tx.objectStore(STORE_NAME).put(record, `${jobId}:${studentId}`);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
   db.close();
 }
 
-export async function getAllPdfBlobs(
+export async function getAllCapturedImages(
   jobId: string,
   studentIds: string[]
-): Promise<Map<string, Blob>> {
-  const result = new Map<string, Blob>();
+): Promise<Map<string, CapturedImageRecord>> {
+  const result = new Map<string, CapturedImageRecord>();
   try {
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
@@ -127,7 +137,7 @@ export async function getAllPdfBlobs(
       for (const studentId of studentIds) {
         const req = store.get(`${jobId}:${studentId}`);
         req.onsuccess = () => {
-          if (req.result) result.set(studentId, req.result as Blob);
+          if (req.result) result.set(studentId, req.result as CapturedImageRecord);
           pending -= 1;
           if (pending === 0) resolve();
         };
@@ -145,6 +155,10 @@ export async function getAllPdfBlobs(
   return result;
 }
 
+export function getTermLabel(term: string): string {
+  return term === '1' ? 'Term 1' : term === '2' ? 'Term 2' : 'Term 3';
+}
+
 export function createJob(params: {
   term: string;
   year: string;
@@ -152,7 +166,7 @@ export function createJob(params: {
   selectedStream: string;
   students: PdfJobStudent[];
 }): PdfJobState {
-  const termLabel = params.term === '1' ? 'Term 1' : params.term === '2' ? 'Term 2' : 'Term 3';
+  const termLabel = getTermLabel(params.term);
   const zipFileName = `${termLabel} Report Cards ${params.year}.zip`;
 
   const job: PdfJobState = {

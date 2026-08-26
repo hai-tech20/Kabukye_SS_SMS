@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useRef, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   ReportCard,
@@ -10,6 +10,14 @@ import {
   type Grade,
   type AcademicTerm,
 } from '@/components/reports/report-card';
+import {
+  captureReportCardImage,
+  blobToDataUrl,
+  createEmptyPdfDoc,
+  addImagePage,
+} from '@/lib/report-card-pdf-capture';
+import { downloadBlob, sanitizeFileName } from '@/lib/zip-utils';
+import { getTermLabel } from '@/lib/report-card-pdf-job';
 
 function ReportViewContent() {
   const searchParams = useSearchParams();
@@ -31,6 +39,12 @@ function ReportViewContent() {
   const [positionInStream, setPositionInStream] = useState<number | undefined>();
   const [totalStudentsInClass, setTotalStudentsInClass] = useState<number | undefined>();
   const [totalStudentsInStream, setTotalStudentsInStream] = useState<number | undefined>();
+
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState('');
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!studentId || !term || !year) {
@@ -220,6 +234,76 @@ function ReportViewContent() {
     loadReport();
   }, [studentId, term, year]);
 
+  // Once all report data is loaded, capture the report card the same way the
+  // admin's bulk ZIP does, so the student sees the identical high-res PDF.
+  useEffect(() => {
+    if (loading || !student || pdfUrl || generatingPdf) return;
+
+    let cancelled = false;
+
+    const generatePdf = async () => {
+      setGeneratingPdf(true);
+      setPdfError('');
+      try {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const element = pdfContainerRef.current?.querySelector('.pdf-report-card') as HTMLElement | null;
+        if (!element) throw new Error('Report card element not ready');
+
+        const captured = await captureReportCardImage(element);
+        const dataUrl = await blobToDataUrl(captured.imageBlob);
+        const pdf = createEmptyPdfDoc();
+        addImagePage(pdf, dataUrl, captured.pixelWidth, captured.pixelHeight, true);
+        const blob = pdf.output('blob');
+
+        if (cancelled) return;
+        setPdfBlob(blob);
+        setPdfUrl(URL.createObjectURL(blob));
+      } catch (err) {
+        console.error('Failed to generate report card PDF:', err);
+        if (!cancelled) setPdfError('Could not generate a PDF preview. Showing the report details below instead.');
+      } finally {
+        if (!cancelled) setGeneratingPdf(false);
+      }
+    };
+
+    void generatePdf();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, student]);
+
+  // Revoke the generated blob URL when the page unmounts or a new PDF replaces it.
+  useEffect(() => {
+    return () => {
+      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    };
+  }, [pdfUrl]);
+
+  const handleDownload = () => {
+    if (!pdfBlob || !student) return;
+    const termLabel = getTermLabel(term || '1');
+    downloadBlob(pdfBlob, `${sanitizeFileName(student.full_name)} - ${termLabel} ${year}.pdf`);
+  };
+
+  const handlePrint = () => {
+    if (!pdfUrl) return;
+    const printFrame = document.createElement('iframe');
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = 'none';
+    printFrame.src = pdfUrl;
+    printFrame.onload = () => {
+      printFrame.contentWindow?.focus();
+      printFrame.contentWindow?.print();
+    };
+    document.body.appendChild(printFrame);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -242,37 +326,93 @@ function ReportViewContent() {
     );
   }
 
+  const reportCardProps = {
+    student,
+    grades,
+    term: term!,
+    year: year!,
+    classTeacher,
+    headTeacher: 'Mr. ISABIRYE SALEH',
+    classTeacherComment,
+    headTeacherComment,
+    academicTerm,
+    optionalSubjects,
+    assignedSubjects,
+    positionInClass,
+    positionInStream,
+    totalStudentsInClass,
+    totalStudentsInStream,
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 py-6 print:bg-white print:py-0">
-      <div className="max-w-[210mm] mx-auto px-4 no-print mb-4 flex justify-between items-center">
+      <div className="max-w-[210mm] mx-auto px-4 no-print mb-4 flex justify-between items-center flex-wrap gap-3">
         <a href="/dashboard/student" className="text-blue-800 font-semibold hover:underline">
           ← Back to Dashboard
         </a>
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="bg-blue-900 text-white px-4 py-2 rounded-lg hover:bg-blue-800"
-        >
-          Print / Save as PDF
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={!pdfBlob}
+            className="bg-blue-900 text-white px-4 py-2 rounded-lg hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Download PDF
+          </button>
+          <button
+            type="button"
+            onClick={handlePrint}
+            disabled={!pdfUrl}
+            className="bg-white border border-blue-900 text-blue-900 px-4 py-2 rounded-lg hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Print
+          </button>
+        </div>
       </div>
-      <ReportCard
-        student={student}
-        grades={grades}
-        term={term!}
-        year={year!}
-        classTeacher={classTeacher}
-        headTeacher="Mr. ISABIRYE SALEH"
-        classTeacherComment={classTeacherComment}
-        headTeacherComment={headTeacherComment}
-        academicTerm={academicTerm}
-        optionalSubjects={optionalSubjects}
-        assignedSubjects={assignedSubjects}
-        positionInClass={positionInClass}
-        positionInStream={positionInStream}
-        totalStudentsInClass={totalStudentsInClass}
-        totalStudentsInStream={totalStudentsInStream}
-      />
+
+      {generatingPdf && (
+        <div className="max-w-[210mm] mx-auto px-4 no-print flex items-center justify-center py-16">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-900 mr-3" />
+          <span className="text-gray-700">Preparing your report card...</span>
+        </div>
+      )}
+
+      {pdfUrl && (
+        <div className="max-w-[210mm] mx-auto px-4 no-print">
+          <embed
+            src={pdfUrl}
+            type="application/pdf"
+            className="w-full rounded-lg shadow-lg border border-gray-300"
+            style={{ height: '85vh' }}
+          />
+        </div>
+      )}
+
+      {pdfError && (
+        <div className="max-w-[210mm] mx-auto px-4 no-print">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm mb-4">
+            {pdfError}
+          </div>
+          <ReportCard {...reportCardProps} />
+        </div>
+      )}
+
+      {/* Hidden container used to capture the same high-res image the ZIP produces */}
+      <div
+        ref={pdfContainerRef}
+        style={{
+          position: 'fixed',
+          left: '-9999px',
+          top: 0,
+          width: '210mm',
+          backgroundColor: 'white',
+          zIndex: -1,
+        }}
+      >
+        <div className="pdf-report-card" style={{ width: '210mm', pageBreakInside: 'avoid' }}>
+          <ReportCard {...reportCardProps} forPdfCapture />
+        </div>
+      </div>
     </div>
   );
 }

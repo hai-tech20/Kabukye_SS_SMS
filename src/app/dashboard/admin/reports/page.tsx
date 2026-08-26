@@ -5,7 +5,14 @@ import { flushSync } from 'react-dom';
 import { getCurrentTerm } from '@/lib/academic-calendar';
 import { withRetry } from '@/lib/retry';
 import AdminSidebar from '@/components/sidebar/AdminSidebar';
-import { captureReportCardPdf, yieldToMain } from '@/lib/report-card-pdf-capture';
+import {
+  captureReportCardImage,
+  blobToDataUrl,
+  createEmptyPdfDoc,
+  addImagePage,
+  preloadImages,
+  yieldToMain,
+} from '@/lib/report-card-pdf-capture';
 import {
   createJob,
   getActiveJob,
@@ -13,9 +20,10 @@ import {
   stopJob,
   isJobStopped,
   clearJobStorage,
-  savePdfBlob,
-  getAllPdfBlobs,
+  saveCapturedImage,
+  getAllCapturedImages,
   getClassFolderName,
+  getTermLabel,
   type PdfJobState,
 } from '@/lib/report-card-pdf-job';
 import { createZipBlob, downloadBlob, sanitizeFileName, type ZipEntry } from '@/lib/zip-utils';
@@ -626,6 +634,7 @@ export default function ReportsPage() {
     }
 
     const remaining = sortedStudents.slice(startIndex);
+    preloadImages(remaining.map((s) => s.photo_url));
     await prefetchSubjectDataForStudents(remaining);
 
     try {
@@ -649,8 +658,12 @@ export default function ReportsPage() {
         if (!reportCardElement) continue;
 
         try {
-          const pdfBlob = await captureReportCardPdf(reportCardElement);
-          await savePdfBlob(job.id, student.id, pdfBlob);
+          const captured = await captureReportCardImage(reportCardElement);
+          await saveCapturedImage(job.id, student.id, {
+            blob: captured.imageBlob,
+            width: captured.pixelWidth,
+            height: captured.pixelHeight,
+          });
           job.completedIds.push(student.id);
           job.currentIndex = i + 1;
           saveJob(job);
@@ -673,20 +686,35 @@ export default function ReportsPage() {
         return;
       }
 
-      const blobMap = await getAllPdfBlobs(
+      const imageMap = await getAllCapturedImages(
         job.id,
         completedStudents.map((s) => s.id)
       );
 
       const zipEntries: ZipEntry[] = [];
+      const classDocs = new Map<string, { doc: ReturnType<typeof createEmptyPdfDoc>; hasPage: boolean }>();
+
       for (const student of completedStudents) {
-        const blob = blobMap.get(student.id);
-        if (!blob) continue;
-        const buffer = await blob.arrayBuffer();
+        const record = imageMap.get(student.id);
+        if (!record) continue;
+        const dataUrl = await blobToDataUrl(record.blob);
+
+        const singlePdf = createEmptyPdfDoc();
+        addImagePage(singlePdf, dataUrl, record.width, record.height, true);
+        const buffer = singlePdf.output('arraybuffer');
         zipEntries.push({
           path: buildStudentPdfPath(student),
           data: new Uint8Array(buffer),
         });
+
+        const classFolder = getClassFolderName(student.class);
+        let classDoc = classDocs.get(classFolder);
+        if (!classDoc) {
+          classDoc = { doc: createEmptyPdfDoc(), hasPage: false };
+          classDocs.set(classFolder, classDoc);
+        }
+        addImagePage(classDoc.doc, dataUrl, record.width, record.height, !classDoc.hasPage);
+        classDoc.hasPage = true;
       }
 
       if (zipEntries.length === 0) {
@@ -694,6 +722,15 @@ export default function ReportsPage() {
         job.status = 'failed';
         saveJob(job);
         return;
+      }
+
+      const termLabel = getTermLabel(job.term);
+      for (const [classFolder, { doc }] of classDocs) {
+        const mergedBuffer = doc.output('arraybuffer');
+        zipEntries.push({
+          path: `${classFolder}/${classFolder} - All Report Cards - ${termLabel} ${job.year}.pdf`,
+          data: new Uint8Array(mergedBuffer),
+        });
       }
 
       const zipBlob = createZipBlob(zipEntries);
